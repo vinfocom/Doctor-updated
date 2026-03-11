@@ -129,6 +129,8 @@ model doctor_whatsapp_numbers {
   doctor_id       Int
   whatsapp_number String   @db.VarChar(255)
   is_primary      Boolean  @default(false)
+  chat_id         BigInt?  @unique
+  username        String?  @db.VarChar(255)
   created_at      DateTime @default(now()) @db.Timestamp(0)
 
   doctor doctors @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
@@ -215,8 +217,9 @@ model appointment {
   start_time       DateTime?          @db.Time(0)
   end_time         DateTime?          @db.Time(0)
   appointment_date DateTime?          @db.Date
-  cancelled_by     String?            @db.VarChar(255)
-  rescheduled_by   String?            @db.VarChar(255)
+  cancelled_by              String?            @db.VarChar(255)
+  rescheduled_by            String?            @db.VarChar(255)
+  notify_telegram_chat_id   BigInt?
   
 
   patient                     patients?                      @relation(fields: [patient_id], references: [patient_id])
@@ -302,6 +305,7 @@ model conversation_sessions {
   in_edit_flow        Int      @db.TinyInt
   doctor_id           Int?
   admin_id            Int?
+  fsm_extra_json      String?  @db.Text
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamp(0)
 }
 
@@ -364,4 +368,60 @@ model announcement_campaign_recipients {
 
   @@unique([campaign_id, patient_id])
   @@index([patient_id, created_at])
+}
+
+model doctor_cache_invalidation_queue {
+  queue_id     BigInt    @id @default(autoincrement())
+  entity_type  String?   @db.VarChar(50)
+  doctor_id    Int?
+  clinic_id    Int?
+  admin_id     Int?
+  slot_date    DateTime? @db.Date
+  slot_time    String?   @db.VarChar(20)
+
+  old_doctor_id  Int?
+  old_clinic_id  Int?
+  old_admin_id   Int?
+  old_slot_date  DateTime? @db.Date
+  old_slot_time  String?   @db.VarChar(20)
+  old_status     String?   @db.VarChar(50)
+  new_status     String?   @db.VarChar(50)
+
+  status     String?   @db.VarChar(20)
+  lock_owner String?   @db.VarChar(80)
+  locked_at  DateTime? @db.DateTime(0)
+
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model message_delivery_status {
+  delivery_id          BigInt    @id @default(autoincrement())
+  provider             String?   @db.VarChar(50)
+  provider_message_sid String?   @db.VarChar(80)
+  channel              String?   @db.VarChar(50)
+  message_status       String?   @db.VarChar(30)
+  to_number            String?   @db.VarChar(80)
+  from_number          String?   @db.VarChar(80)
+  error_code           String?   @db.VarChar(20)
+  error_message        String?   @db.Text
+  payload_json         String?   @db.Text
+  created_at           DateTime  @default(now()) @db.Timestamp(0)
+  updated_at           DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model qr_walkin_queue {
+  queue_id       BigInt    @id @default(autoincrement())
+  admin_id       BigInt?
+  doctor_id      BigInt?
+  clinic_id      BigInt?
+  patient_name   String?   @db.VarChar(255)
+  phone          String?   @db.VarChar(255)
+  queue_date     DateTime? @db.Date
+  queue_position Int?
+  estimated_time DateTime? @db.DateTime(0)
+  status         String?   @db.VarChar(50)
+  source_channel String?   @db.VarChar(50)
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+  updated_at     DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 }

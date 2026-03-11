@@ -1,3 +1,4 @@
+process.noDeprecation = true; // suppress url.parse() DEP0169 — required by Next.js handle()
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -27,6 +28,9 @@ app.prepare().then(() => {
       origin: "*",
       methods: ["GET", "POST"],
     },
+    pingInterval: 25000,   // send ping every 25s (default)
+    pingTimeout: 60000,    // wait 60s for pong before disconnecting (default is 20s — too short for dev)
+    connectTimeout: 30000,
   });
   global.__DOCTOR_IO__ = io;
 

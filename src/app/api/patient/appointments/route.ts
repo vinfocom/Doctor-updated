@@ -38,7 +38,10 @@ export async function GET(req: Request) {
             orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
         });
 
-        return NextResponse.json({ appointments });
+        const safe = JSON.parse(JSON.stringify(appointments, (_k, v) =>
+            typeof v === "bigint" ? v.toString() : v
+        ));
+        return NextResponse.json({ appointments: safe });
     } catch (error) {
         console.error("Patient appointments GET error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -176,7 +179,10 @@ export async function PATCH(req: Request) {
             },
         });
 
-        return NextResponse.json({ appointment: updated });
+        const safe = JSON.parse(JSON.stringify(updated, (_k, v) =>
+            typeof v === "bigint" ? v.toString() : v
+        ));
+        return NextResponse.json({ appointment: safe });
     } catch (error) {
         console.error("Patient appointments PATCH error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
