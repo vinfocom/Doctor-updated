@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import DashboardSidebar from "@/components/DashboardSidebar";
+import SystemTrends from "@/components/SystemTrends";
 
 interface DashboardStats {
     totalDoctors: number;
@@ -12,21 +12,10 @@ interface DashboardStats {
     completedAppointments: number;
 }
 
-interface RecentAppointment {
-    appointment_id: number;
-    created_at: string;
-    status: string;
-    patient: { full_name: string; phone: string } | null;
-    doctor: { doctor_name: string } | null;
-    clinic: { clinic_name: string } | null;
-    slot: { slot_date: string; slot_time: string } | null;
-}
-
 export default function AdminDashboard() {
     const router = useRouter();
     const [user, setUser] = useState<{ name: string; role: string } | null>(null);
     const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [recentAppointments, setRecentAppointments] = useState<RecentAppointment[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
@@ -39,7 +28,6 @@ export default function AdminDashboard() {
             if (dashRes.ok) {
                 const dashData = await dashRes.json();
                 setStats(dashData.stats);
-                setRecentAppointments(dashData.recentAppointments || []);
             }
         } catch { router.push("/login"); } finally { setLoading(false); }
     }, [router]);
@@ -63,8 +51,6 @@ export default function AdminDashboard() {
         { label: "Total Doctors", value: stats?.totalDoctors || 0, icon: "👨‍⚕️", gradient: "from-indigo-100 to-violet-100" },
         { label: "Total Patients", value: stats?.totalPatients || 0, icon: "🧑‍🤝‍🧑", gradient: "from-cyan-100 to-sky-100" },
         { label: "Total Appointments", value: stats?.totalAppointments || 0, icon: "📅", gradient: "from-emerald-100 to-green-100" },
-        { label: "Pending", value: stats?.pendingAppointments || 0, icon: "⏳", gradient: "from-amber-100 to-orange-100" },
-        { label: "Completed", value: stats?.completedAppointments || 0, icon: "✅", gradient: "from-green-100 to-emerald-100" },
     ];
 
     return (
@@ -75,67 +61,41 @@ export default function AdminDashboard() {
             </motion.div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
                 {statCards.map((card, i) => (
                     <motion.div
                         key={card.label}
-                        className="stat-card"
+                        className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 p-7 flex flex-col gap-4"
+                        style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.08, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                        whileHover={{ y: -3 }}
+                        transition={{ delay: i * 0.1, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        whileHover={{ y: -4, boxShadow: "0 12px 28px rgba(79,70,229,0.1)" }}
                     >
-                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-xl mb-4`}>
+                        {/* Background accent */}
+                        <div className={`absolute top-0 right-0 w-28 h-28 rounded-bl-[5rem] bg-gradient-to-br ${card.gradient} opacity-60`} />
+
+                        {/* Icon */}
+                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-2xl z-10`}>
                             {card.icon}
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 tracking-tight">{card.value}</p>
-                        <p className="text-sm text-gray-500 mt-1">{card.label}</p>
+
+                        {/* Value */}
+                        <div className="z-10">
+                            <p className="text-5xl font-extrabold text-gray-900 tracking-tight">{card.value.toLocaleString()}</p>
+                            <p className="text-base text-gray-500 mt-2 font-medium">{card.label}</p>
+                        </div>
+
+                        {/* Bottom accent line */}
+                        <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient}`} />
                     </motion.div>
                 ))}
             </div>
 
-            {/* Recent Appointments */}
-            <motion.div
-                className="glass-card p-7"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.5 }}
-            >
-                <h2 className="text-lg font-semibold text-gray-900 mb-5">Recent Appointments</h2>
-                {recentAppointments.length === 0 ? (
-                    <div className="text-center py-12">
-                        <p className="text-4xl mb-3">📋</p>
-                        <p className="text-gray-400">No appointments yet</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th></tr>
-                            </thead>
-                            <tbody>
-                                {recentAppointments.map((apt, i) => (
-                                    <motion.tr
-                                        key={apt.appointment_id}
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.5 + i * 0.05 }}
-                                    >
-                                        <td className="text-gray-800 font-medium">{apt.patient?.full_name || "N/A"}</td>
-                                        <td className="text-gray-600">{apt.doctor?.doctor_name || "N/A"}</td>
-                                        <td className="text-gray-500">
-                                            {apt.slot?.slot_date
-                                                ? new Date(apt.slot.slot_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                                                : new Date(apt.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                        </td>
-                                        <td><span className={`badge badge-${apt.status.toLowerCase()}`}>{apt.status}</span></td>
-                                    </motion.tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </motion.div>
+            {/* System Trends — SUPER_ADMIN only */}
+            {user?.role === "SUPER_ADMIN" && (
+                <SystemTrends />
+            )}
         </div>
     );
 }

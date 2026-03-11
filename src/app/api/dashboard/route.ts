@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+function jsonSafe<T>(value: T): T {
+    return JSON.parse(
+        JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v))
+    ) as T;
+}
+
 // GET: Dashboard stats
 export async function GET() {
     try {
@@ -39,7 +45,7 @@ export async function GET() {
                     prisma.appointment.count({ where: { ...adminFilter, status: "COMPLETED" } }),
                 ]);
 
-            return NextResponse.json({
+            return NextResponse.json(jsonSafe({
                 stats: {
                     totalDoctors,
                     totalPatients,
@@ -48,11 +54,11 @@ export async function GET() {
                     completedAppointments,
                 },
                 recentAppointments,
-            });
+            }));
         }
 
         if (session.role === "DOCTOR") {
-            
+
             const doctor = await prisma.doctors.findFirst({
                 where: { phone: session.email }, // fallback approach
             });
@@ -81,13 +87,13 @@ export async function GET() {
                     }),
                 ]);
 
-            return NextResponse.json({
+            return NextResponse.json(jsonSafe({
                 stats: {
                     totalAppointments,
                     pendingAppointments,
                 },
                 recentAppointments,
-            });
+            }));
         }
 
         return NextResponse.json({ error: "Invalid role" }, { status: 403 });

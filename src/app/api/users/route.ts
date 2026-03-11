@@ -29,7 +29,6 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { name, email, password, role, specific_details } = body;
 
-        // Basic validation
         if (!name || !email || !password || !role) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
@@ -39,50 +38,43 @@ export async function POST(req: Request) {
         }
 
         // Check if user exists
-        const existingUser = await prisma.users.findUnique({ where: { email } });
+        const existingUser = await prisma.users.findUnique({
+            where: { email },
+            include: { doctor: true },
+        });
+
         if (existingUser) {
-            return NextResponse.json({ error: "User already exists with this email" }, { status: 409 });
+            // If user has an active linked doctor record → block (truly in use)
+            if (existingUser.doctor) {
+                return NextResponse.json({ error: "User already exists with this email" }, { status: 409 });
+            }
+            // Otherwise it's an orphan (doctor was deleted but user record wasn't cleaned up)
+            // We'll reuse this user in the transaction below
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Transaction to ensure data consistency
         const result = await prisma.$transaction(async (tx) => {
-            // 1. Create User
-            const newUser = await tx.users.create({
-                data: {
-                    name,
-                    email,
-                    password: hashedPassword,
-                    role: role,
-                }
-            });
+            // 1. Create or reuse user record
+            let newUser: { user_id: number; email: string | null; role: string };
+            if (existingUser) {
+                // Reuse orphan user — update credentials
+                newUser = await tx.users.update({
+                    where: { email },
+                    data: { name, password: hashedPassword, role: role as "DOCTOR" | "ADMIN" },
+                });
+            } else {
+                newUser = await tx.users.create({
+                    data: { name, email, password: hashedPassword, role: role },
+                });
+            }
 
-            // 2. Create Role-Specific Profile
+            // 2. Create role-specific profile
             if (role === "DOCTOR") {
-                // For doctors, we need an admin_id. 
-                // If the super admin is creating them, who is their admin? 
-                // Option A: The Super Admin's own admin profile (if exists).
-                // Option B: A specific admin selected in the form.
-                // For now, let's assume the Super Admin *is* the admin, or we use a default.
-                // Let's check if 'specific_details' has admin_id, else try to find one.
-
                 let adminId = specific_details?.admin_id;
-
                 if (!adminId) {
-                    // Fallback: Find the Super Admin's admin profile
                     const superAdminProfile = await tx.admins.findUnique({ where: { user_id: session.userId } });
-                    if (superAdminProfile) {
-                        adminId = superAdminProfile.admin_id;
-                    } else {
-                        // Fallback 2: Just pick the first admin? Or fail? 
-                        // Let's fail for now to be safe, or user needs to provide it.
-                        // Actually, for simplicity in this MVP, if no admin_id is provided, 
-                        // we can try to find *any* admin or create one? No, that's risky.
-                        // Let's default to 1 if we can't find anything, assuming ID 1 is the main admin.
-                        adminId = 1;
-                    }
+                    adminId = superAdminProfile?.admin_id ?? 1;
                 }
 
                 await tx.doctors.create({
@@ -105,18 +97,16 @@ export async function POST(req: Request) {
                     }
                 });
             } else if (role === "ADMIN") {
-                await tx.admins.create({
-                    data: {
-                        user_id: newUser.user_id,
-                        // Admin might not need other fields initially
-                    }
-                });
+                await tx.admins.create({ data: { user_id: newUser.user_id } });
             }
 
             return newUser;
         });
 
-        return NextResponse.json({ message: "User created successfully", user: { id: result.user_id, email: result.email, role: result.role } });
+        return NextResponse.json({
+            message: "User created successfully",
+            user: { id: result.user_id, email: result.email, role: result.role }
+        });
 
     } catch (error) {
         console.error("Create User Error:", error);
