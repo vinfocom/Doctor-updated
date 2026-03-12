@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
+import { Stethoscope, Users, CalendarDays } from "lucide-react";
 import SystemTrends from "@/components/SystemTrends";
 
 interface DashboardStats {
@@ -48,9 +49,9 @@ export default function AdminDashboard() {
     }
 
     const statCards = [
-        { label: "Total Doctors", value: stats?.totalDoctors || 0, icon: "👨‍⚕️", gradient: "from-indigo-100 to-violet-100" },
-        { label: "Total Patients", value: stats?.totalPatients || 0, icon: "🧑‍🤝‍🧑", gradient: "from-cyan-100 to-sky-100" },
-        { label: "Total Appointments", value: stats?.totalAppointments || 0, icon: "📅", gradient: "from-emerald-100 to-green-100" },
+        { label: "Total Doctors", value: stats?.totalDoctors || 0, icon: <Stethoscope size={24} className="text-indigo-600" />, gradient: "from-indigo-100 to-violet-100" },
+        { label: "Total Patients", value: stats?.totalPatients || 0, icon: <Users size={24} className="text-cyan-600" />, gradient: "from-cyan-100 to-sky-100" },
+        { label: "Total Appointments", value: stats?.totalAppointments || 0, icon: <CalendarDays size={24} className="text-emerald-600" />, gradient: "from-emerald-100 to-green-100" },
     ];
 
     return (
@@ -76,7 +77,7 @@ export default function AdminDashboard() {
                         <div className={`absolute top-0 right-0 w-28 h-28 rounded-bl-[5rem] bg-gradient-to-br ${card.gradient} opacity-60`} />
 
                         {/* Icon */}
-                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-2xl z-10`}>
+                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} flex items-center justify-center z-10`}>
                             {card.icon}
                         </div>
 

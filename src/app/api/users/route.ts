@@ -77,7 +77,7 @@ export async function POST(req: Request) {
                     adminId = superAdminProfile?.admin_id ?? 1;
                 }
 
-                await tx.doctors.create({
+                const doctor = await tx.doctors.create({
                     data: {
                         doctor_name: name,
                         phone: specific_details?.phone || null,
@@ -90,12 +90,33 @@ export async function POST(req: Request) {
                             email.split("@")[0] ||
                             `doctor_${newUser.user_id}`
                         ),
-                        chat_id: Number(
-                            specific_details?.chat_id ??
-                            (Math.floor(Date.now() / 1000) + newUser.user_id)
-                        ),
+                        chat_id: specific_details?.chat_id
+                            ? BigInt(specific_details.chat_id)
+                            : BigInt(Math.floor(Date.now() / 1000) + newUser.user_id),
+                        gst_number: specific_details?.gst_number || null,
+                        pan_number: specific_details?.pan_number || null,
+                        address: specific_details?.address || null,
+                        registration_no: specific_details?.registration_no || null,
+                        education: specific_details?.education || null,
+                        document_url: specific_details?.document_url || null,
+                        specialization: specific_details?.specialization || null,
+                        profile_pic_url: specific_details?.profile_pic_url || null,
+                        barcode_url: specific_details?.barcode_url || null,
+                        num_clinics: specific_details?.num_clinics ? Number(specific_details.num_clinics) : 0,
                     }
                 });
+
+                // Create whatsapp_numbers rows if provided
+                const waNums = specific_details?.whatsapp_numbers;
+                if (Array.isArray(waNums) && waNums.length > 0) {
+                    await tx.doctor_whatsapp_numbers.createMany({
+                        data: waNums.map((wn: { whatsapp_number: string }, i: number) => ({
+                            doctor_id: doctor.doctor_id,
+                            whatsapp_number: wn.whatsapp_number,
+                            is_primary: i === 0,
+                        })),
+                    });
+                }
             } else if (role === "ADMIN") {
                 await tx.admins.create({ data: { user_id: newUser.user_id } });
             }

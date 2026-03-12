@@ -35,6 +35,20 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Block inactive doctors from logging in
+        if (user.role === "DOCTOR") {
+            const doctor = await prisma.doctors.findUnique({
+                where: { user_id: user.user_id },
+                select: { status: true },
+            });
+            if (doctor?.status === "INACTIVE") {
+                return NextResponse.json(
+                    { error: "Your account has been deactivated. Please contact the administrator." },
+                    { status: 403 }
+                );
+            }
+        }
+
         // Generate JWT
         const token = generateToken({
             userId: user.user_id,

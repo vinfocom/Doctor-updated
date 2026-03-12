@@ -6,6 +6,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { motion } from "motion/react";
+import { TrendingUp, Users, CalendarDays, Globe } from "lucide-react";
 
 type Period = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -37,9 +38,9 @@ const PERIODS: { key: Period; label: string; desc: string }[] = [
 ];
 
 const chartCard = "glass-card p-6 flex flex-col gap-2";
-const chartTitle = (t: string, sub: string) => (
-    <p className="text-sm font-semibold text-gray-700 mb-1">
-        {t} <span className="text-gray-400 font-normal">{sub}</span>
+const chartTitle = (icon: React.ReactNode, t: string, sub: string) => (
+    <p className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+        {icon} {t} <span className="text-gray-400 font-normal">{sub}</span>
     </p>
 );
 
@@ -80,8 +81,8 @@ export default function SystemTrends() {
                             key={key}
                             onClick={() => setPeriod(key)}
                             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 ${period === key
-                                    ? "bg-white text-indigo-600 shadow-sm border border-indigo-100"
-                                    : "text-gray-500 hover:text-gray-700"
+                                ? "bg-white text-indigo-600 shadow-sm border border-indigo-100"
+                                : "text-gray-500 hover:text-gray-700"
                                 }`}
                         >
                             {label}
@@ -111,7 +112,7 @@ export default function SystemTrends() {
 
                     {/* 1. Doctors Growth */}
                     <motion.div className={chartCard} key={`dg-${period}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-                        {chartTitle("📈 Doctors Growth", `(${periodDesc})`)}
+                        {chartTitle(<TrendingUp size={14} className="text-indigo-500" />, "Doctors Growth", `(${periodDesc})`)}
                         {data.doctorsGrowth.length === 0 ? <Empty label="No doctor registrations in this period" /> : (
                             <ResponsiveContainer width="100%" height={220}>
                                 <LineChart data={data.doctorsGrowth} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
@@ -128,7 +129,7 @@ export default function SystemTrends() {
 
                     {/* 2. Patients per Doctor */}
                     <motion.div className={chartCard} key={`ppd-${period}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.05 }}>
-                        {chartTitle("👥 Patients per Doctor", "")}
+                        {chartTitle(<Users size={14} className="text-cyan-600" />, "Patients per Doctor", "")}
                         {data.patientsPerDoctor.length === 0 ? <Empty label="No patients assigned yet" /> : (
                             <ResponsiveContainer width="100%" height={220}>
                                 <BarChart data={data.patientsPerDoctor} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
@@ -148,7 +149,7 @@ export default function SystemTrends() {
 
                     {/* 3. Appointment Trend */}
                     <motion.div className={chartCard} key={`at-${period}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>
-                        {chartTitle("📅 Appointment Trend", `(${periodDesc})`)}
+                        {chartTitle(<CalendarDays size={14} className="text-cyan-500" />, "Appointment Trend", `(${periodDesc})`)}
                         {data.appointmentTrend.length === 0 ? <Empty label="No appointments in this period" /> : (
                             <ResponsiveContainer width="100%" height={220}>
                                 <LineChart data={data.appointmentTrend} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
@@ -165,7 +166,7 @@ export default function SystemTrends() {
 
                     {/* 4. System Distribution */}
                     <motion.div className={chartCard} key={`sd-${period}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.15 }}>
-                        {chartTitle("🌐 System Distribution", "(total)")}
+                        {chartTitle(<Globe size={14} className="text-violet-500" />, "System Distribution", "(total)")}
                         <div className="flex items-center gap-4">
                             <ResponsiveContainer width="60%" height={220}>
                                 <PieChart>

@@ -7,7 +7,412 @@ datasource db {
   provider = "mysql"
 }
 
-// Enums matched to DB names and values
+model doctor_remainder_queue {
+  queue_id            Int                     @id @default(autoincrement())
+  doctor_id           Int
+  schedule_id         Int?
+  admin_id            Int?
+  slot_date           DateTime                @db.Date
+  schedule_start_time DateTime?               @db.Time(0)
+  schedule_end_time   DateTime?               @db.Time(0)
+  channel             String?                 @db.VarChar(50)
+  destination         String?                 @db.VarChar(255)
+  status              String?                 @db.VarChar(50)
+  attempt_count       Int                     @default(0)
+  next_retry_at       DateTime?
+  last_error          String?                 @db.VarChar(255)
+  dedup_key           String?                 @unique @db.VarChar(255)
+  created_at          DateTime                @default(now()) @db.Timestamp(0)
+  updated_at          DateTime                @updatedAt @db.Timestamp(0)
+  sent_at             DateTime?               @db.Timestamp(0)
+  lead_minutes        Int                     @default(10)
+  admin               admins?                 @relation(fields: [admin_id], references: [admin_id])
+  doctor              doctors                 @relation(fields: [doctor_id], references: [doctor_id])
+  schedule            doctor_clinic_schedule? @relation(fields: [schedule_id], references: [schedule_id])
+
+  @@index([doctor_id, slot_date])
+  @@index([admin_id], map: "doctor_remainder_queue_admin_id_fkey")
+  @@index([schedule_id], map: "doctor_remainder_queue_schedule_id_fkey")
+}
+
+model users {
+  user_id     Int           @id @default(autoincrement())
+  name        String?       @db.VarChar(255)
+  email       String?       @unique @db.VarChar(255)
+  password    String?       @db.VarChar(255)
+  role        Role
+  created_at  DateTime?     @default(now()) @db.Timestamp(0)
+  admin       admins?
+  doctor      doctors?
+  user_tokens user_tokens[]
+}
+
+model admins {
+  admin_id              Int                      @id @default(autoincrement())
+  user_id               Int?                     @unique
+  created_at            DateTime?                @default(now()) @db.Timestamp(0)
+  user                  users?                   @relation(fields: [user_id], references: [user_id])
+  appointments          appointment[]
+  clinics               clinics[]
+  schedules             doctor_clinic_schedule[]
+  leaves                doctor_leaves[]
+  doctorRemainderQueues doctor_remainder_queue[]
+  doctors               doctors[]
+  patients              patients[]
+}
+
+model doctors {
+  doctor_id              Int                       @id @default(autoincrement())
+  doctor_name            String?                   @db.VarChar(255)
+  phone                  String?                   @db.VarChar(255)
+  status                 DoctorStatus?
+  admin_id               Int
+  user_id                Int?                      @unique
+  whatsapp_number        String?                   @db.VarChar(255)
+  specialization         String?                   @db.VarChar(255)
+  acceptDays             Int?
+  chat_id                BigInt?                   @unique
+  username               String?                   @db.VarChar(255)
+  gst_number             String?                   @db.VarChar(255)
+  pan_number             String?                   @db.VarChar(255)
+  address                String?                   @db.VarChar(500)
+  registration_no        String?                   @db.VarChar(255)
+  education              String?                   @db.VarChar(500)
+  document_url           String?                   @db.VarChar(500)
+  profile_pic_url        String?                   @db.VarChar(500)
+  barcode_url            String?                   @db.VarChar(500)
+  num_clinics            Int?                      @default(0)
+  announcement_campaigns announcement_campaigns[]
+  appointments           appointment[]
+  chat_messages          chat_messages[]
+  clinics                clinics[]
+  schedules              doctor_clinic_schedule[]
+  leaves                 doctor_leaves[]
+  doctorRemainderQueues  doctor_remainder_queue[]
+  whatsapp_numbers       doctor_whatsapp_numbers[]
+  admin                  admins                    @relation(fields: [admin_id], references: [admin_id])
+  user                   users?                    @relation(fields: [user_id], references: [user_id])
+  patients               patients[]
+
+  @@index([admin_id], map: "doctors_admin_id_fkey")
+}
+
+model doctor_whatsapp_numbers {
+  id              Int      @id @default(autoincrement())
+  doctor_id       Int
+  whatsapp_number String   @db.VarChar(255)
+  is_primary      Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+  chat_id         BigInt?
+  username        String?  @db.VarChar(255)
+  doctor          doctors  @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+
+  @@index([doctor_id], map: "doctor_whatsapp_numbers_doctor_id_fkey")
+}
+
+model clinics {
+  clinic_id    Int                      @id @default(autoincrement())
+  clinic_name  String?                  @db.VarChar(255)
+  phone        String?                  @db.VarChar(255)
+  status       ClinicStatus?
+  admin_id     Int
+  doctor_id    Int?
+  location     String?                  @db.VarChar(255)
+  appointments appointment[]
+  admin        admins                   @relation(fields: [admin_id], references: [admin_id])
+  doctor       doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
+  schedules    doctor_clinic_schedule[]
+
+  @@index([admin_id], map: "clinics_admin_id_fkey")
+  @@index([doctor_id], map: "clinics_doctor_id_fkey")
+}
+
+model patients {
+  patient_id              Int                                @id @default(autoincrement())
+  full_name               String?                            @db.VarChar(255)
+  admin_id                Int
+  doctor_id               Int?
+  phone                   String?                            @db.VarChar(255)
+  booking_id              Int?
+  telegram_chat_id        String?                            @unique @db.VarChar(255)
+  patient_count           Int?                               @default(0)
+  age                     Int?
+  gender                  String?                            @db.VarChar(20)
+  password                String?                            @db.VarChar(255)
+  announcement_recipients announcement_campaign_recipients[]
+  appointments            appointment[]
+  chat_messages           chat_messages[]
+  whatsapp_numbers        patient_whatsapp_numbers[]
+  admin                   admins                             @relation(fields: [admin_id], references: [admin_id])
+  doctor                  doctors?                           @relation(fields: [doctor_id], references: [doctor_id])
+
+  @@index([admin_id], map: "patients_admin_id_fkey")
+  @@index([doctor_id], map: "patients_doctor_id_fkey")
+}
+
+model inbound_turn_queue {
+  queue_id      BigInt    @id @default(autoincrement())
+  inbound_sid   String    @unique(map: "uq_inbound_turn_sid") @db.VarChar(96)
+  from_number   String    @db.VarChar(80)
+  body          String    @db.Text
+  pre_state     String    @db.VarChar(64)
+  status        String    @default("PENDING") @db.VarChar(20)
+  attempt_count Int       @default(0)
+  next_retry_at DateTime? @db.DateTime(0)
+  locked_at     DateTime? @db.DateTime(0)
+  lock_owner    String?   @db.VarChar(80)
+  last_error    String?   @db.Text
+  dead_at       DateTime? @db.DateTime(0)
+  dead_reason   String?   @db.Text
+  created_at    DateTime  @default(now()) @db.Timestamp(0)
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([status, next_retry_at], map: "idx_inbound_turn_poll")
+  @@index([locked_at, lock_owner], map: "idx_inbound_turn_lock")
+}
+
+model patient_whatsapp_numbers {
+  id              Int      @id @default(autoincrement())
+  patient_id      Int
+  whatsapp_number String   @db.VarChar(255)
+  is_primary      Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+  chat_id         BigInt?
+  username        String?  @db.VarChar(255)
+  patient         patients @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@index([patient_id], map: "patient_whatsapp_numbers_patient_id_fkey")
+}
+
+model appointment {
+  appointment_id              Int                            @id @default(autoincrement())
+  patient_id                  Int?
+  doctor_id                   Int?
+  clinic_id                   Int?
+  admin_id                    Int?
+  status                      AppointmentStatus?
+  created_at                  DateTime?                      @default(now()) @db.Timestamp(0)
+  start_time                  DateTime?                      @db.Time(0)
+  end_time                    DateTime?                      @db.Time(0)
+  appointment_date            DateTime?                      @db.Date
+  cancelled_by                String?                        @db.VarChar(255)
+  rescheduled_by              String?                        @db.VarChar(255)
+  notify_telegram_chat_id     BigInt?
+  admin                       admins?                        @relation(fields: [admin_id], references: [admin_id])
+  clinic                      clinics?                       @relation(fields: [clinic_id], references: [clinic_id])
+  doctor                      doctors?                       @relation(fields: [doctor_id], references: [doctor_id])
+  patient                     patients?                      @relation(fields: [patient_id], references: [patient_id])
+  appointmentNotificationLogs appointment_notification_log[]
+
+  @@unique([doctor_id, appointment_date, start_time])
+  @@index([appointment_date])
+  @@index([admin_id], map: "appointment_admin_id_fkey")
+  @@index([clinic_id], map: "appointment_clinic_id_fkey")
+  @@index([patient_id], map: "appointment_patient_id_fkey")
+}
+
+model appointment_notification_log {
+  appointment_id       Int?
+  event_type           String?      @db.VarChar(255)
+  channel              String?      @db.VarChar(255)
+  status               String?      @db.VarChar(255)
+  meta_json            Json?
+  admin_id             Int?
+  created_at           DateTime     @default(now()) @db.Timestamp(0)
+  notification_id      Int          @id @default(autoincrement())
+  destination          String?      @db.VarChar(255)
+  error_text           String?      @db.VarChar(255)
+  sent_at              DateTime?    @db.Timestamp(0)
+  attempt_count        Int          @default(0)
+  dead_at              DateTime?    @db.DateTime(0)
+  dead_reason          String?      @db.Text
+  delivery_status      String?      @db.VarChar(30)
+  delivery_updated_at  DateTime?    @db.DateTime(0)
+  lock_owner           String?      @db.VarChar(80)
+  locked_at            DateTime?    @db.DateTime(0)
+  next_retry_at        DateTime?    @db.DateTime(0)
+  provider_message_sid String?      @db.VarChar(80)
+  appointment          appointment? @relation(fields: [appointment_id], references: [appointment_id])
+
+  @@index([appointment_id], map: "appointment_notification_log_appointment_id_fkey")
+}
+
+model doctor_leaves {
+  leave_id   Int       @id @default(autoincrement())
+  doctor_id  Int
+  admin_id   Int
+  leave_date DateTime  @db.Date
+  start_time DateTime? @db.Time(0)
+  end_time   DateTime? @db.Time(0)
+  reason     String?   @db.VarChar(255)
+  admin      admins    @relation(fields: [admin_id], references: [admin_id])
+  doctor     doctors   @relation(fields: [doctor_id], references: [doctor_id])
+
+  @@index([admin_id], map: "doctor_leaves_admin_id_fkey")
+  @@index([doctor_id], map: "doctor_leaves_doctor_id_fkey")
+}
+
+model doctor_clinic_schedule {
+  schedule_id           Int                      @id @default(autoincrement())
+  doctor_id             Int?
+  clinic_id             Int?
+  admin_id              Int?
+  start_time            String?                  @db.VarChar(20)
+  end_time              String?                  @db.VarChar(20)
+  slot_duration         Int?
+  day_of_week           Int                      @db.TinyInt
+  effective_from        DateTime                 @db.Date
+  effective_to          DateTime                 @db.Date
+  admin                 admins?                  @relation(fields: [admin_id], references: [admin_id])
+  clinic                clinics?                 @relation(fields: [clinic_id], references: [clinic_id])
+  doctor                doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
+  doctorRemainderQueues doctor_remainder_queue[]
+
+  @@index([admin_id], map: "doctor_clinic_schedule_admin_id_fkey")
+  @@index([clinic_id], map: "doctor_clinic_schedule_clinic_id_fkey")
+  @@index([doctor_id], map: "doctor_clinic_schedule_doctor_id_fkey")
+}
+
+model conversation_sessions {
+  user_id             String   @id @db.VarChar(255)
+  state               String   @db.VarChar(255)
+  context_json        String   @db.Text
+  response_language   String   @db.VarChar(50)
+  language_locked     Int      @db.TinyInt
+  language_turn_count Int
+  init_unclear_count  Int
+  in_edit_flow        Int      @db.TinyInt
+  doctor_id           Int?
+  admin_id            Int?
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  fsm_extra_json      String?  @db.Text
+}
+
+model inbound_message_sids {
+  message_sid String   @id @db.VarChar(255)
+  user_id     String   @db.VarChar(255)
+  body        String?  @db.Text
+  received_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([received_at], map: "idx_inbound_message_received")
+}
+
+model user_tokens {
+  token_hash String   @id @db.Char(64)
+  user_id    Int
+  expires_at DateTime @db.DateTime(0)
+  revoked    Int      @db.TinyInt
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  user       users    @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id], map: "user_tokens_user_id_fkey")
+}
+
+model chat_messages {
+  message_id Int      @id @default(autoincrement())
+  patient_id Int
+  doctor_id  Int
+  sender     String   @db.VarChar(50)
+  content    String   @db.Text
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  doctor     doctors  @relation(fields: [doctor_id], references: [doctor_id])
+  patient    patients @relation(fields: [patient_id], references: [patient_id])
+
+  @@index([doctor_id, patient_id])
+  @@index([patient_id], map: "chat_messages_patient_id_fkey")
+}
+
+model announcement_campaigns {
+  campaign_id Int                                @id @default(autoincrement())
+  doctor_id   Int
+  message     String                             @db.Text
+  target_mode String?                            @db.VarChar(20)
+  target_date DateTime?                          @db.Date
+  created_at  DateTime                           @default(now()) @db.Timestamp(0)
+  recipients  announcement_campaign_recipients[]
+  doctor      doctors                            @relation(fields: [doctor_id], references: [doctor_id])
+
+  @@index([doctor_id, created_at])
+}
+
+model announcement_campaign_recipients {
+  id          Int                    @id @default(autoincrement())
+  campaign_id Int
+  patient_id  Int
+  is_read     Boolean                @default(false)
+  created_at  DateTime               @default(now()) @db.Timestamp(0)
+  read_at     DateTime?              @db.Timestamp(0)
+  campaign    announcement_campaigns @relation(fields: [campaign_id], references: [campaign_id], onDelete: Cascade)
+  patient     patients               @relation(fields: [patient_id], references: [patient_id])
+
+  @@unique([campaign_id, patient_id])
+  @@index([patient_id, created_at])
+}
+
+model doctor_cache_invalidation_queue {
+  queue_id      BigInt    @id @default(autoincrement())
+  entity_type   String    @db.VarChar(20)
+  doctor_id     Int?
+  clinic_id     Int?
+  admin_id      Int?
+  slot_date     DateTime? @db.Date
+  slot_time     String?   @db.VarChar(5)
+  old_doctor_id Int?
+  old_clinic_id Int?
+  old_admin_id  Int?
+  old_slot_date DateTime? @db.Date
+  old_slot_time String?   @db.VarChar(5)
+  old_status    String?   @db.VarChar(20)
+  new_status    String?   @db.VarChar(20)
+  status        String    @default("PENDING") @db.VarChar(20)
+  lock_owner    String?   @db.VarChar(80)
+  locked_at     DateTime? @db.DateTime(0)
+  created_at    DateTime  @default(now()) @db.Timestamp(0)
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([clinic_id], map: "idx_dcq_clinic")
+  @@index([doctor_id], map: "idx_dcq_doc")
+  @@index([status, queue_id], map: "idx_dcq_poll")
+}
+
+model message_delivery_status {
+  delivery_id          BigInt   @id @default(autoincrement())
+  provider             String   @db.VarChar(30)
+  provider_message_sid String   @db.VarChar(100)
+  channel              String   @db.VarChar(30)
+  message_status       String   @db.VarChar(40)
+  to_number            String?  @db.VarChar(120)
+  from_number          String?  @db.VarChar(120)
+  error_code           String?  @db.VarChar(40)
+  error_message        String?  @db.Text
+  payload_json         String?  @db.Text
+  created_at           DateTime @default(now()) @db.Timestamp(0)
+  updated_at           DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([provider, provider_message_sid], map: "uq_provider_sid")
+  @@index([message_status, updated_at], map: "idx_delivery_status")
+}
+
+model qr_walkin_queue {
+  queue_id       BigInt    @id @default(autoincrement())
+  admin_id       BigInt
+  doctor_id      BigInt
+  clinic_id      BigInt
+  patient_name   String    @db.VarChar(255)
+  phone          String    @db.VarChar(32)
+  queue_date     DateTime  @db.Date
+  queue_position Int
+  estimated_time DateTime? @db.DateTime(0)
+  status         String    @default("WAITING") @db.VarChar(20)
+  source_channel String    @default("qr") @db.VarChar(20)
+  created_at     DateTime? @default(now()) @db.Timestamp(0)
+  updated_at     DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([doctor_id, clinic_id, queue_date, phone, status], map: "uq_qr_waiting_phone")
+  @@index([doctor_id, clinic_id, queue_date, status, queue_position], map: "idx_qr_waiting_lookup")
+}
+
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -33,395 +438,4 @@ enum ClinicStatus {
 enum DoctorStatus {
   ACTIVE
   INACTIVE
-}
-
-model doctor_remainder_queue {
-  queue_id Int @id @default(autoincrement())
-
-  doctor_id   Int
-  schedule_id Int?
-  admin_id    Int?
-
-  slot_date           DateTime  @db.Date
-  schedule_start_time DateTime? @db.Time
-  schedule_end_time   DateTime? @db.Time
-
-  channel     String? @db.VarChar(50)
-  destination String? @db.VarChar(255)
-  status      String? @db.VarChar(50)
-
-  attempt_count Int       @default(0)
-  next_retry_at DateTime?
-  last_error    String?   @db.VarChar(255)
-
-  dedup_key String? @unique @db.VarChar(255)
-
-  lead_minutes Int @default(10)
-
-  created_at DateTime  @default(now()) @db.Timestamp(0)
-  updated_at DateTime  @updatedAt @db.Timestamp(0)
-  sent_at    DateTime? @db.Timestamp(0)
-
-  doctor   doctors                 @relation(fields: [doctor_id], references: [doctor_id])
-  schedule doctor_clinic_schedule? @relation(fields: [schedule_id], references: [schedule_id])
-  admin    admins?                 @relation(fields: [admin_id], references: [admin_id])
-
-  @@index([doctor_id, slot_date])
-}
-
-model users {
-  user_id    Int       @id @default(autoincrement())
-  name       String?   @db.VarChar(255)
-  email      String?   @unique @db.VarChar(255)
-  password   String?   @db.VarChar(255)
-  role       Role
-  created_at DateTime? @default(now()) @db.Timestamp(0)
-
-  admin       admins?
-  doctor      doctors?
-  user_tokens user_tokens[]
-}
-
-model admins {
-  admin_id   Int       @id @default(autoincrement())
-  user_id    Int?      @unique
-  created_at DateTime? @default(now()) @db.Timestamp(0)
-
-  user     users?     @relation(fields: [user_id], references: [user_id])
-  clinics  clinics[]
-  doctors  doctors[]
-  patients patients[]
-
-  appointments          appointment[]
-  schedules             doctor_clinic_schedule[]
-  leaves                doctor_leaves[]
-  doctorRemainderQueues doctor_remainder_queue[]
-}
-
-model doctors {
-  doctor_id       Int           @id @default(autoincrement())
-  doctor_name     String?       @db.VarChar(255)
-  phone           String?       @db.VarChar(255)
-  status          DoctorStatus?
-  admin_id        Int
-  user_id         Int?          @unique
-  whatsapp_number String?       @db.VarChar(255)
-  specialization  String?       @db.VarChar(255)
-  username        String?       @db.VarChar(255)
-  chat_id         BigInt?       @unique
-
-  admin                 admins                    @relation(fields: [admin_id], references: [admin_id])
-  user                  users?                    @relation(fields: [user_id], references: [user_id])
-  schedules             doctor_clinic_schedule[]
-  appointments          appointment[]
-  clinics               clinics[]
-  patients              patients[]
-  whatsapp_numbers      doctor_whatsapp_numbers[]
-  leaves                doctor_leaves[]
-  acceptDays            Int?
-  chat_messages         chat_messages[]
-  doctorRemainderQueues doctor_remainder_queue[]
-  announcement_campaigns announcement_campaigns[]
-}
-
-model doctor_whatsapp_numbers {
-  id              Int      @id @default(autoincrement())
-  doctor_id       Int
-  whatsapp_number String   @db.VarChar(255)
-  is_primary      Boolean  @default(false)
-  chat_id         BigInt?  @unique
-  username        String?  @db.VarChar(255)
-  created_at      DateTime @default(now()) @db.Timestamp(0)
-
-  doctor doctors @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
-}
-
-model clinics {
-  clinic_id   Int           @id @default(autoincrement())
-  clinic_name String?       @db.VarChar(255)
-  phone       String?       @db.VarChar(255)
-  status      ClinicStatus?
-  admin_id    Int
-  doctor_id   Int?
-  location    String?       @db.VarChar(255)
-
-  admin        admins?                  @relation(fields: [admin_id], references: [admin_id])
-  doctor       doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
-  schedules    doctor_clinic_schedule[]
-  appointments appointment[]
-}
-
-model patients {
-  patient_id       Int     @id @default(autoincrement())
-  full_name        String? @db.VarChar(255)
-  admin_id         Int
-  doctor_id        Int?
-  phone            String? @db.VarChar(255)
-  telegram_chat_id String? @unique @db.VarChar(255)
-  booking_id       Int?
-  patient_count    Int?    @default(0)
-  password         String? @db.VarChar(255)
-  age              Int?
-  gender           String? @db.VarChar(20)
-
-  admin         admins?         @relation(fields: [admin_id], references: [admin_id])
-  doctor        doctors?        @relation(fields: [doctor_id], references: [doctor_id])
-  appointments  appointment[]
-  chat_messages chat_messages[]
-  announcement_recipients announcement_campaign_recipients[]
-  whatsapp_numbers patient_whatsapp_numbers[]
-}
-
-model inbound_turn_queue {
-  queue_id       BigInt    @id @default(autoincrement())
-  inbound_sid    String    @unique(map: "uq_inbound_turn_sid") @db.VarChar(96)
-  from_number    String    @db.VarChar(80)
-  body           String    @db.Text
-  pre_state      String    @db.VarChar(64)
-  status         String    @default("PENDING") @db.VarChar(20)
-  attempt_count  Int       @default(0)
-  next_retry_at  DateTime? @db.DateTime(0)
-  locked_at      DateTime? @db.DateTime(0)
-  lock_owner     String?   @db.VarChar(80)
-  last_error     String?   @db.Text
-  dead_at        DateTime? @db.DateTime(0)
-  dead_reason    String?   @db.Text
-  created_at     DateTime  @default(now()) @db.Timestamp(0)
-  updated_at     DateTime  @default(now()) @updatedAt @db.Timestamp(0)
-
-  @@index([status, next_retry_at], map: "idx_inbound_turn_poll")
-  @@index([locked_at, lock_owner], map: "idx_inbound_turn_lock")
-}
-
-model patient_whatsapp_numbers {
-  id              Int      @id @default(autoincrement())
-  patient_id      Int
-  whatsapp_number String   @db.VarChar(255)
-  is_primary      Boolean  @default(false)
-  chat_id         BigInt?  // Telegram/WhatsApp chat ID
-  username        String?  @db.VarChar(255)
-  created_at      DateTime @default(now()) @db.Timestamp(0)
-
-  patient patients @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
-}
-
-model appointment {
-  appointment_id Int  @id @default(autoincrement())
-  patient_id     Int?
-  doctor_id      Int?
-  clinic_id      Int?
-  admin_id       Int?
-
-  status           AppointmentStatus?
-  created_at       DateTime?          @default(now()) @db.Timestamp(0)
-  start_time       DateTime?          @db.Time(0)
-  end_time         DateTime?          @db.Time(0)
-  appointment_date DateTime?          @db.Date
-  cancelled_by              String?            @db.VarChar(255)
-  rescheduled_by            String?            @db.VarChar(255)
-  notify_telegram_chat_id   BigInt?
-  
-
-  patient                     patients?                      @relation(fields: [patient_id], references: [patient_id])
-  doctor                      doctors?                       @relation(fields: [doctor_id], references: [doctor_id])
-  clinic                      clinics?                       @relation(fields: [clinic_id], references: [clinic_id])
-  admin                       admins?                        @relation(fields: [admin_id], references: [admin_id])
-  appointmentNotificationLogs appointment_notification_log[]
-
-  @@unique([doctor_id, appointment_date, start_time])
-  @@index([appointment_date])
-}
-
-model appointment_notification_log {
-  notification_id Int @id @default(autoincrement())
-
-  appointment_id Int?
-  appointment    appointment? @relation(fields: [appointment_id], references: [appointment_id])
-
-  event_type  String?   @db.VarChar(255)
-  channel     String?   @db.VarChar(255)
-  destination String?   @db.VarChar(255)
-  status      String?   @db.VarChar(255)
-  error_text  String?   @db.VarChar(255)
-  sent_at     DateTime? @db.Timestamp(0)
-
-  meta_json Json?
-  admin_id  Int?
-
-  attempt_count         Int       @default(0)
-  next_retry_at         DateTime? @db.DateTime(0)
-  locked_at             DateTime? @db.DateTime(0)
-  lock_owner            String?   @db.VarChar(80)
-  dead_at               DateTime? @db.DateTime(0)
-  dead_reason           String?   @db.Text
-  provider_message_sid  String?   @db.VarChar(80)
-  delivery_status       String?   @db.VarChar(30)
-  delivery_updated_at   DateTime? @db.DateTime(0)
-
-  created_at DateTime @default(now()) @db.Timestamp(0)
-}
-
-model doctor_leaves {
-  leave_id  Int @id @default(autoincrement())
-  doctor_id Int
-  admin_id  Int
-
-  leave_date DateTime  @db.Date
-  start_time DateTime? @db.Time
-  end_time   DateTime? @db.Time
-
-  reason String? @db.VarChar(255)
-
-  doctor doctors @relation(fields: [doctor_id], references: [doctor_id])
-  admin  admins  @relation(fields: [admin_id], references: [admin_id])
-}
-
-model doctor_clinic_schedule {
-  schedule_id    Int      @id @default(autoincrement())
-  doctor_id      Int?
-  clinic_id      Int?
-  admin_id       Int?
-  start_time     String?  @db.VarChar(20)
-  end_time       String?  @db.VarChar(20)
-  slot_duration  Int?
-  day_of_week    Int      @db.TinyInt
-  effective_from DateTime @db.Date
-  effective_to   DateTime @db.Date
-
-  doctor                doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
-  clinic                clinics?                 @relation(fields: [clinic_id], references: [clinic_id])
-  admin                 admins?                  @relation(fields: [admin_id], references: [admin_id])
-  doctorRemainderQueues doctor_remainder_queue[]
-}
-
-model conversation_sessions {
-  user_id             String   @id @db.VarChar(255)
-  state               String   @db.VarChar(255)
-  context_json        String   @db.Text
-  response_language   String   @db.VarChar(50)
-  language_locked     Int      @db.TinyInt
-  language_turn_count Int
-  init_unclear_count  Int
-  in_edit_flow        Int      @db.TinyInt
-  doctor_id           Int?
-  admin_id            Int?
-  fsm_extra_json      String?  @db.Text
-  updated_at          DateTime @default(now()) @updatedAt @db.Timestamp(0)
-}
-
-model inbound_message_sids {
-  message_sid String   @id @db.VarChar(255)
-  user_id     String   @db.VarChar(255)
-  body        String?  @db.Text
-  received_at DateTime @default(now()) @db.Timestamp(0)
-}
-
-model user_tokens {
-  token_hash String   @id @db.Char(64)
-  user_id    Int
-  expires_at DateTime @db.DateTime(0)
-  revoked    Int      @db.TinyInt
-  created_at DateTime @default(now()) @db.Timestamp(0)
-
-  user users @relation(fields: [user_id], references: [user_id])
-}
-
-model chat_messages {
-  message_id Int      @id @default(autoincrement())
-  patient_id Int
-  doctor_id  Int
-  sender     String   @db.VarChar(50) // 'DOCTOR' or 'PATIENT'
-  content    String   @db.Text
-  is_read    Boolean  @default(false)
-  created_at DateTime @default(now()) @db.Timestamp(0)
-
-  patient patients @relation(fields: [patient_id], references: [patient_id])
-  doctor  doctors  @relation(fields: [doctor_id], references: [doctor_id])
-
-  @@index([doctor_id, patient_id])
-}
-
-model announcement_campaigns {
-  campaign_id  Int      @id @default(autoincrement())
-  doctor_id    Int
-  message      String   @db.Text
-  target_mode  String?  @db.VarChar(20)
-  target_date  DateTime? @db.Date
-  created_at   DateTime @default(now()) @db.Timestamp(0)
-
-  doctor     doctors                           @relation(fields: [doctor_id], references: [doctor_id])
-  recipients announcement_campaign_recipients[]
-
-  @@index([doctor_id, created_at])
-}
-
-model announcement_campaign_recipients {
-  id          Int      @id @default(autoincrement())
-  campaign_id Int
-  patient_id  Int
-  is_read     Boolean  @default(false)
-  created_at  DateTime @default(now()) @db.Timestamp(0)
-  read_at     DateTime? @db.Timestamp(0)
-
-  campaign announcement_campaigns @relation(fields: [campaign_id], references: [campaign_id], onDelete: Cascade)
-  patient  patients               @relation(fields: [patient_id], references: [patient_id])
-
-  @@unique([campaign_id, patient_id])
-  @@index([patient_id, created_at])
-}
-
-model doctor_cache_invalidation_queue {
-  queue_id     BigInt    @id @default(autoincrement())
-  entity_type  String?   @db.VarChar(50)
-  doctor_id    Int?
-  clinic_id    Int?
-  admin_id     Int?
-  slot_date    DateTime? @db.Date
-  slot_time    String?   @db.VarChar(20)
-
-  old_doctor_id  Int?
-  old_clinic_id  Int?
-  old_admin_id   Int?
-  old_slot_date  DateTime? @db.Date
-  old_slot_time  String?   @db.VarChar(20)
-  old_status     String?   @db.VarChar(50)
-  new_status     String?   @db.VarChar(50)
-
-  status     String?   @db.VarChar(20)
-  lock_owner String?   @db.VarChar(80)
-  locked_at  DateTime? @db.DateTime(0)
-
-  created_at DateTime @default(now()) @db.Timestamp(0)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(0)
-}
-
-model message_delivery_status {
-  delivery_id          BigInt    @id @default(autoincrement())
-  provider             String?   @db.VarChar(50)
-  provider_message_sid String?   @db.VarChar(80)
-  channel              String?   @db.VarChar(50)
-  message_status       String?   @db.VarChar(30)
-  to_number            String?   @db.VarChar(80)
-  from_number          String?   @db.VarChar(80)
-  error_code           String?   @db.VarChar(20)
-  error_message        String?   @db.Text
-  payload_json         String?   @db.Text
-  created_at           DateTime  @default(now()) @db.Timestamp(0)
-  updated_at           DateTime  @default(now()) @updatedAt @db.Timestamp(0)
-}
-
-model qr_walkin_queue {
-  queue_id       BigInt    @id @default(autoincrement())
-  admin_id       BigInt?
-  doctor_id      BigInt?
-  clinic_id      BigInt?
-  patient_name   String?   @db.VarChar(255)
-  phone          String?   @db.VarChar(255)
-  queue_date     DateTime? @db.Date
-  queue_position Int?
-  estimated_time DateTime? @db.DateTime(0)
-  status         String?   @db.VarChar(50)
-  source_channel String?   @db.VarChar(50)
-  created_at     DateTime  @default(now()) @db.Timestamp(0)
-  updated_at     DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 }

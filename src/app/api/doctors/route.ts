@@ -25,11 +25,12 @@ export async function GET(req: NextRequest) {
                     },
                 },
                 schedules: true,
+                whatsapp_numbers: true,
             },
         });
         const serializedDoctors = doctors.map(doc => ({
             ...doc,
-            chat_id: doc.chat_id ? String(doc.chat_id) : null
+            chat_id: doc.chat_id ? String(doc.chat_id) : null,
         }));
 
         return NextResponse.json({ doctors: serializedDoctors });
@@ -99,25 +100,65 @@ export async function PATCH(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { doctor_id, doctor_name, phone, whatsapp_number, specialization } = body;
+        const {
+            doctor_id, doctor_name, phone, whatsapp_number, specialization,
+            gst_number, pan_number, address, registration_no, education, document_url,
+            chat_id, profile_pic_url, barcode_url, num_clinics, status,
+            whatsapp_numbers, // array of { whatsapp_number: string }
+        } = body;
 
         if (!doctor_id) {
             return NextResponse.json({ error: "doctor_id required" }, { status: 400 });
         }
 
-        const updated = await prisma.doctors.update({
+        const updated = await prisma.$transaction(async (tx) => {
+            const doc = await tx.doctors.update({
+                where: { doctor_id: Number(doctor_id) },
+                data: {
+                    ...(doctor_name !== undefined && { doctor_name }),
+                    ...(phone !== undefined && { phone }),
+                    ...(whatsapp_number !== undefined && { whatsapp_number }),
+                    ...(specialization !== undefined && { specialization }),
+                    ...(gst_number !== undefined && { gst_number: gst_number || null }),
+                    ...(pan_number !== undefined && { pan_number: pan_number || null }),
+                    ...(address !== undefined && { address: address || null }),
+                    ...(registration_no !== undefined && { registration_no: registration_no || null }),
+                    ...(education !== undefined && { education: education || null }),
+                    ...(document_url !== undefined && { document_url: document_url || null }),
+                    ...(chat_id !== undefined && { chat_id: chat_id ? BigInt(chat_id) : null }),
+                    ...(profile_pic_url !== undefined && { profile_pic_url: profile_pic_url || null }),
+                    ...(barcode_url !== undefined && { barcode_url: barcode_url || null }),
+                    ...(num_clinics !== undefined && { num_clinics: Number(num_clinics) || 0 }),
+                    ...(status !== undefined && { status }),
+                },
+            });
+
+            // Replace whatsapp_numbers if provided
+            if (Array.isArray(whatsapp_numbers)) {
+                await tx.doctor_whatsapp_numbers.deleteMany({ where: { doctor_id: Number(doctor_id) } });
+                if (whatsapp_numbers.length > 0) {
+                    await tx.doctor_whatsapp_numbers.createMany({
+                        data: whatsapp_numbers.map((wn: { whatsapp_number: string }, i: number) => ({
+                            doctor_id: Number(doctor_id),
+                            whatsapp_number: wn.whatsapp_number,
+                            is_primary: i === 0,
+                        })),
+                    });
+                }
+            }
+
+            return doc;
+        });
+
+        // Re-fetch with whatsapp_numbers included
+        const full = await prisma.doctors.findUnique({
             where: { doctor_id: Number(doctor_id) },
-            data: {
-                ...(doctor_name !== undefined && { doctor_name }),
-                ...(phone !== undefined && { phone }),
-                ...(whatsapp_number !== undefined && { whatsapp_number }),
-                ...(specialization !== undefined && { specialization }),
-            },
+            include: { whatsapp_numbers: true },
         });
 
         return NextResponse.json({
             message: "Doctor updated successfully",
-            doctor: { ...updated, chat_id: updated.chat_id ? String(updated.chat_id) : null },
+            doctor: { ...full, chat_id: full?.chat_id ? String(full.chat_id) : null },
         });
     } catch (error) {
         console.error("Update doctor error:", error);
