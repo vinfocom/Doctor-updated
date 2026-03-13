@@ -4,6 +4,26 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
 
+function attachPatientType<T extends { patient_id: number; phone: string | null }>(patients: T[]) {
+    const firstPatientByPhone = new Map<string, number>();
+
+    for (const patient of [...patients].sort((a, b) => a.patient_id - b.patient_id)) {
+        const phoneKey = String(patient.phone || "").trim();
+        if (!phoneKey || firstPatientByPhone.has(phoneKey)) continue;
+        firstPatientByPhone.set(phoneKey, patient.patient_id);
+    }
+
+    return patients.map((patient) => {
+        const phoneKey = String(patient.phone || "").trim();
+        const firstPatientId = phoneKey ? firstPatientByPhone.get(phoneKey) : undefined;
+
+        return {
+            ...patient,
+            patient_type: firstPatientId && firstPatientId !== patient.patient_id ? "Other" : "Self",
+        };
+    });
+}
+
 export async function GET(req: Request) {
     try {
         const session = await getSessionFromRequest(req);
@@ -43,7 +63,7 @@ export async function GET(req: Request) {
                 registered_at: firstApptMap.get(p.patient_id)?.toISOString() || null,
             }));
 
-            return NextResponse.json({ patients: result });
+            return NextResponse.json({ patients: attachPatientType(result) });
         }
 
         let doctorId: number | null = null;
@@ -111,7 +131,7 @@ export async function GET(req: Request) {
             patients.push(patient);
         }
 
-        return NextResponse.json({ patients });
+        return NextResponse.json({ patients: attachPatientType(patients) });
     } catch (error) {
         console.error("Get patients error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });

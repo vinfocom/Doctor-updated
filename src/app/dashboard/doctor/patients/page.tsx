@@ -6,25 +6,32 @@ import { motion } from "motion/react";
 interface Patient {
     patient_id: number;
     full_name: string;
-    age: number;
-    gender: string;
-    phone: string;
-    reason: string | null;
+    age: number | null;
+    gender: string | null;
+    phone: string | null;
     patient_type: string | null;
 }
 
 export default function DoctorPatientsPage() {
     const router = useRouter();
-    const [user, setUser] = useState<{ name: string } | null>(null);
+    const [, setUser] = useState<{ name: string } | null>(null);
     const [patients, setPatients] = useState<Patient[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
         try {
             const [meRes, patRes] = await Promise.all([fetch("/api/auth/me"), fetch("/api/patients")]);
-            if (!meRes.ok) { router.push("/login"); return; }
+            if (!meRes.ok) {
+                router.push("/login");
+                return;
+            }
+
             const meData = await meRes.json();
-            if (meData.user.role !== "DOCTOR") { router.push("/login"); return; }
+            if (meData.user.role !== "DOCTOR") {
+                router.push("/login");
+                return;
+            }
+
             setUser(meData.user);
 
             if (patRes.ok) {
@@ -33,13 +40,14 @@ export default function DoctorPatientsPage() {
             }
         } catch (error) {
             console.error("Failed to fetch data:", error);
-            // Non-critical if we just can't fetch patients, don't necessarily log out unless meRes fails
         } finally {
             setLoading(false);
         }
     }, [router]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     if (loading) {
         return (
@@ -61,18 +69,12 @@ export default function DoctorPatientsPage() {
                     <h1 className="text-3xl font-bold text-gray-900">My Patients</h1>
                     <p className="text-gray-500 mt-1 text-sm">View details of your patients</p>
                 </motion.div>
-                {/* Future implementation: Add Patient Modal */}
-                {/* 
-                <motion.button ...>
-                    Add Patient
-                </motion.button> 
-                */}
             </div>
 
             <motion.div className="glass-card p-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 {patients.length === 0 ? (
                     <div className="text-center py-12">
-                        <p className="text-4xl mb-3">👥</p>
+                        <p className="text-4xl mb-3">Patients</p>
                         <p className="text-gray-400">No patients found</p>
                     </div>
                 ) : (
@@ -81,9 +83,9 @@ export default function DoctorPatientsPage() {
                             <thead>
                                 <tr>
                                     <th>Patient</th>
-                                    <th>Age/Gender</th>
+                                    <th>Age</th>
+                                    <th>Gender</th>
                                     <th>Phone</th>
-                                    <th>Reason</th>
                                     <th>Type</th>
                                 </tr>
                             </thead>
@@ -93,20 +95,25 @@ export default function DoctorPatientsPage() {
                                         <td>
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
-                                                    {pat.full_name?.charAt(0)?.toUpperCase()}
+                                                    {pat.full_name?.charAt(0)?.toUpperCase() || "P"}
                                                 </div>
                                                 <span className="text-gray-800 font-medium">{pat.full_name || "N/A"}</span>
                                             </div>
                                         </td>
+                                        <td className="text-gray-500">{pat.age ? `${pat.age} yrs` : "N/A"}</td>
                                         <td className="text-gray-500">
-                                            {pat.age ? `${pat.age} yrs` : "N/A"}{" • "}
                                             {pat.gender ? (pat.gender.charAt(0).toUpperCase() + pat.gender.slice(1).toLowerCase()) : "N/A"}
                                         </td>
                                         <td className="text-gray-500">{pat.phone || "N/A"}</td>
-                                        <td className="text-gray-500 truncate max-w-xs" title={pat.reason || ""}>{pat.reason || "N/A"}</td>
                                         <td>
                                             {pat.patient_type ? (
-                                                <span className={`badge badge-${pat.patient_type.toLowerCase().replace(/\s+/g, '-')}`}>
+                                                <span
+                                                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                        pat.patient_type === "Other"
+                                                            ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                                                            : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                                    }`}
+                                                >
                                                     {pat.patient_type}
                                                 </span>
                                             ) : (
