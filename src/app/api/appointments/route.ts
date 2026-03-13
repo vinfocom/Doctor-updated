@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { cookies } from 'next/headers';
+import { Prisma } from '@/generated/prisma/client';
+
+const VALID_APPOINTMENT_STATUSES = new Set([
+    'BOOKED',
+    'PENDING',
+    'COMPLETED',
+    'CANCELLED',
+]);
 
 function jsonSafe<T>(value: T): T {
     return JSON.parse(
@@ -21,8 +29,8 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         let doctorId = searchParams.get('doctorId');
         let adminId = searchParams.get('adminId');
-        let clinicId = searchParams.get('clinicId');
-        let date = searchParams.get('date');
+        const clinicId = searchParams.get('clinicId');
+        const date = searchParams.get('date');
         const dateFrom = searchParams.get('dateFrom');
         const dateTo = searchParams.get('dateTo');
         const status = searchParams.get('status');
@@ -67,12 +75,12 @@ export async function GET(request: Request) {
             }
         }
 
-        const where: any = {};
+        const where: Prisma.appointmentWhereInput = {};
         if (doctorId) where.doctor_id = Number(doctorId);
         if (adminId) where.admin_id = Number(adminId);
         if (clinicId) where.clinic_id = Number(clinicId);
-        if (status && status !== 'ALL') {
-            where.status = status;
+        if (status && status !== 'ALL' && VALID_APPOINTMENT_STATUSES.has(status)) {
+            where.status = status as never;
         }
         if (date) {
             const dateStart = parseISTDate(date);
@@ -116,7 +124,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        let { patient_phone, patient_name, doctor_id, clinic_id, admin_id, appointment_date, start_time, end_time } = body;
+        let doctor_id = body.doctor_id;
+        const clinic_id = body.clinic_id;
+        let admin_id = body.admin_id;
+        const appointment_date = body.appointment_date;
+        const start_time = body.start_time;
+        const end_time = body.end_time;
+        const patient_phone = String(body.patient_phone || '').trim();
+        const patient_name = String(body.patient_name || '').trim();
 
         // Resolve IDs from session
         const cookieStore = await cookies();
@@ -162,6 +177,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Date and time required' }, { status: 400 });
         }
 
+        if (!patient_phone || !patient_name) {
+            return NextResponse.json({ error: 'Patient phone and patient name are required' }, { status: 400 });
+        }
+
         // Construct Date objects
         const dateObj = parseISTDate(appointment_date);
         const startTimeObj = new Date(`1970-01-01T${start_time}:00Z`);
@@ -176,9 +195,18 @@ export async function POST(request: Request) {
         });
         const booking_id = existingAppointmentsCount + 1;
 
-        // Find or create patient by phone
+        // Reuse only the exact same patient in the same admin/doctor scope.
+        // If the same phone is used with a different name, create a separate patient row.
         let patient = await prisma.patients.findFirst({
-            where: { phone: patient_phone }
+            where: {
+                phone: patient_phone,
+                full_name: patient_name,
+                admin_id: Number(admin_id),
+                doctor_id: Number(doctor_id),
+            },
+            orderBy: {
+                patient_id: 'desc'
+            }
         });
 
         if (!patient) {
@@ -188,7 +216,7 @@ export async function POST(request: Request) {
                     admin_id: Number(admin_id),
                     doctor_id: Number(doctor_id),
                     booking_id: booking_id,
-                    full_name: patient_name || 'New Patient',
+                    full_name: patient_name,
                 }
             });
         } else {
@@ -197,7 +225,8 @@ export async function POST(request: Request) {
                 where: { patient_id: patient.patient_id },
                 data: {
                     doctor_id: Number(doctor_id),
-                    booking_id: booking_id
+                    booking_id: booking_id,
+                    full_name: patient_name,
                 }
             });
         }
@@ -217,9 +246,9 @@ export async function POST(request: Request) {
 
         return NextResponse.json(appointment);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error creating appointment:', error);
-        if (error.code === 'P2002') {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             return NextResponse.json(
                 { error: 'Slot already booked' },
                 { status: 409 }

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { convertTo12Hour, convertTo24Hour } from '@/lib/timeUtils';
 
@@ -25,6 +25,13 @@ interface AppointmentModalProps {
     initialValues?: AppointmentModalInitialValues;
 }
 
+type BookingFor = 'SELF' | 'OTHER';
+
+interface MatchedPatient {
+    patient_id: number;
+    full_name: string | null;
+}
+
 const to12HourLabel = (time: string): string => {
     if (!time) return "";
     return /AM|PM/i.test(time) ? time : convertTo12Hour(time);
@@ -36,6 +43,7 @@ const emptyForm = {
     clinic_id: '',
     date: '',
     time: '',
+    booking_for: 'SELF' as BookingFor,
 };
 
 export default function AppointmentModal({
@@ -51,6 +59,8 @@ export default function AppointmentModal({
     const [error, setError] = useState('');
     const [formData, setFormData] = useState(emptyForm);
     const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+    const [matchedPatients, setMatchedPatients] = useState<MatchedPatient[]>([]);
+    const [lookupLoading, setLookupLoading] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -58,25 +68,64 @@ export default function AppointmentModal({
             setError('');
             setAvailableSlots([]);
             setSlotDuration(30);
+            setMatchedPatients([]);
+            setLookupLoading(false);
             setFormData({
                 patient_phone: initialValues?.patient_phone || '',
                 patient_name: initialValues?.patient_name || '',
                 clinic_id: initialValues?.clinic_id || '',
                 date: initialValues?.date || '',
                 time: initialValues?.time || '',
+                booking_for: 'SELF',
             });
         } else {
             setFormData(emptyForm);
             setAvailableSlots([]);
             setError('');
+            setMatchedPatients([]);
+            setLookupLoading(false);
         }
     }, [initialValues, isOpen]);
 
     useEffect(() => {
-        if (formData.clinic_id && formData.date) {
-            fetchSlots();
+        if (!isOpen || mode !== 'create') return;
+
+        const phone = formData.patient_phone.trim();
+        if (phone.length < 8) {
+            setMatchedPatients([]);
+            setLookupLoading(false);
+            return;
         }
-    }, [formData.clinic_id, formData.date]);
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setLookupLoading(true);
+            try {
+                const res = await fetch(`/api/patients/lookup?phone=${encodeURIComponent(phone)}`, {
+                    signal: controller.signal,
+                });
+
+                if (!res.ok) {
+                    setMatchedPatients([]);
+                    return;
+                }
+
+                const data = await res.json();
+                setMatchedPatients(data.patients || []);
+            } catch (error) {
+                if ((error as Error).name !== 'AbortError') {
+                    setMatchedPatients([]);
+                }
+            } finally {
+                setLookupLoading(false);
+            }
+        }, 250);
+
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [formData.patient_phone, isOpen, mode]);
 
 
     const fetchClinics = async () => {
@@ -91,7 +140,7 @@ export default function AppointmentModal({
         }
     };
 
-    const fetchSlots = async () => {
+    const fetchSlots = useCallback(async () => {
         if (!formData.date || !formData.clinic_id) return;
 
         try {
@@ -109,7 +158,13 @@ export default function AppointmentModal({
             console.error(e);
             setAvailableSlots([]);
         }
-    };
+    }, [formData.clinic_id, formData.date]);
+
+    useEffect(() => {
+        if (formData.clinic_id && formData.date) {
+            fetchSlots();
+        }
+    }, [fetchSlots, formData.clinic_id, formData.date]);
 
     const handleClinicChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const clinicId = e.target.value;
@@ -150,6 +205,7 @@ export default function AppointmentModal({
                 : {
                     patient_phone: formData.patient_phone,
                     patient_name: formData.patient_name,
+                    booking_for: formData.booking_for,
                     clinic_id: formData.clinic_id,
                     appointment_date: formData.date,
                     start_time: startTime24,
@@ -169,7 +225,7 @@ export default function AppointmentModal({
                 const data = await res.json();
                 setError(data.error || 'Failed to create appointment');
             }
-        } catch (err) {
+        } catch {
             setError('An error occurred');
         } finally {
             setLoading(false);
@@ -215,18 +271,70 @@ export default function AppointmentModal({
                                     onChange={(e) => setFormData({ ...formData, patient_phone: e.target.value })}
                                     readOnly={mode === 'reschedule'}
                                 />
+                                {mode === 'create' && lookupLoading && (
+                                    <p className="mt-1 text-xs text-gray-400">Checking existing patients...</p>
+                                )}
                             </div>
 
+                            {mode === 'create' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Booking For</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(['SELF', 'OTHER'] as BookingFor[]).map((value) => (
+                                            <button
+                                                key={value}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, booking_for: value })}
+                                                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                                                    formData.booking_for === value
+                                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {value === 'SELF' ? 'Self' : 'Other'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name (Optional if existing)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Patient Name{mode === 'create' ? '' : ' (Optional if existing)'}
+                                </label>
                                 <input
                                     type="text"
+                                    required={mode === 'create'}
                                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                                     placeholder="Enter full name"
                                     value={formData.patient_name}
                                     onChange={(e) => setFormData({ ...formData, patient_name: e.target.value })}
                                     readOnly={mode === 'reschedule'}
                                 />
+                                {mode === 'create' && matchedPatients.length > 0 && (
+                                    <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-3">
+                                        <p className="text-xs font-medium text-amber-700">Existing names on this phone</p>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {matchedPatients.map((patient) => (
+                                                <button
+                                                    key={patient.patient_id}
+                                                    type="button"
+                                                    onClick={() => setFormData({
+                                                        ...formData,
+                                                        patient_name: patient.full_name || '',
+                                                        booking_for: 'SELF',
+                                                    })}
+                                                    className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                                                >
+                                                    {patient.full_name || 'Unnamed patient'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="mt-2 text-xs text-amber-700">
+                                            Same name reuses the same patient. Different name books for `Other` on the same phone.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
