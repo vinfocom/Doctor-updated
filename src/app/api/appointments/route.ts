@@ -144,6 +144,7 @@ export async function POST(request: Request) {
         let doctor_id = body.doctor_id;
         const clinic_id = body.clinic_id;
         let admin_id = body.admin_id;
+        const booking_for = String(body.booking_for || "SELF").toUpperCase();
         const appointment_date = body.appointment_date;
         const start_time = body.start_time;
         const end_time = body.end_time;
@@ -209,6 +210,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Date and time required' }, { status: 400 });
         }
 
+        if (booking_for !== "SELF" && booking_for !== "OTHER") {
+            return NextResponse.json({ error: 'Invalid booking_for value' }, { status: 400 });
+        }
+
         if (!patient_phone || !patient_name) {
             return NextResponse.json({ error: 'Patient phone and patient name are required' }, { status: 400 });
         }
@@ -227,8 +232,7 @@ export async function POST(request: Request) {
         });
         const booking_id = existingAppointmentsCount + 1;
 
-        // Reuse only the exact same patient in the same admin/doctor scope.
-        // If the same phone is used with a different name, create a separate patient row.
+        // Find exact same patient first in the same admin/doctor scope.
         let patient = await prisma.patients.findFirst({
             where: {
                 phone: patient_phone,
@@ -240,6 +244,39 @@ export async function POST(request: Request) {
                 patient_id: 'desc'
             }
         });
+
+        const existingPatientsOnPhone = await prisma.patients.findMany({
+            where: {
+                phone: patient_phone,
+                admin_id: Number(admin_id),
+                doctor_id: Number(doctor_id),
+            },
+            select: {
+                patient_id: true,
+                full_name: true,
+            },
+            orderBy: {
+                patient_id: 'desc'
+            }
+        });
+
+        const normalizedPatientName = patient_name.trim().toLowerCase();
+        const hasDifferentExistingName = existingPatientsOnPhone.some((p) => {
+            const existingName = String(p.full_name || '').trim().toLowerCase();
+            return Boolean(existingName) && existingName !== normalizedPatientName;
+        });
+
+        // SELF means the doctor is booking for an already-known patient on that phone.
+        // If the phone already has another patient name and this submitted name doesn't match
+        // an existing record, force the caller to switch to OTHER instead of silently creating one.
+        if (!patient && booking_for === "SELF" && hasDifferentExistingName) {
+            return NextResponse.json(
+                {
+                    error: 'This phone already has a different patient name. Choose an existing name or book as Other.',
+                },
+                { status: 409 }
+            );
+        }
 
         if (!patient) {
             patient = await prisma.patients.create({
@@ -276,7 +313,13 @@ export async function POST(request: Request) {
             }
         });
 
-        return NextResponse.json(appointment);
+        return NextResponse.json({
+            ...appointment,
+            booking_for,
+            patient_reused: Boolean(
+                existingPatientsOnPhone.some((p) => p.patient_id === patient.patient_id)
+            ),
+        });
 
     } catch (error: unknown) {
         console.error('Error creating appointment:', error);
