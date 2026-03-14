@@ -90,6 +90,29 @@ async function getDoctorTargetPatients(userId: number, targetMode: TargetMode = 
     return { doctorId: doctor.doctor_id, patientIds, patientsList };
 }
 
+async function getDoctorAnnouncementDates(userId: number) {
+    const doctor = await prisma.doctors.findUnique({
+        where: { user_id: userId },
+        select: { doctor_id: true },
+    });
+    if (!doctor) return null;
+
+    const rows = await prisma.$queryRaw<Array<{ appointment_date: Date | null }>>`
+        SELECT DISTINCT a.appointment_date
+        FROM appointment a
+        WHERE
+            a.doctor_id = ${doctor.doctor_id}
+            AND a.status = 'BOOKED'
+            AND a.patient_id IS NOT NULL
+            AND DATE(CONVERT_TZ(a.appointment_date, '+00:00', '+05:30')) >= DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'))
+        ORDER BY a.appointment_date ASC
+    `;
+
+    return rows
+        .map((row) => (row.appointment_date ? new Date(row.appointment_date).toISOString().slice(0, 10) : null))
+        .filter((value): value is string => Boolean(value));
+}
+
 async function createAnnouncementCampaign(params: {
     doctorId: number;
     message: string;
@@ -341,6 +364,12 @@ export async function GET(req: Request) {
                 .slice(0, limit);
 
             return NextResponse.json({ campaigns: allCampaigns });
+        }
+
+        if (mode === "available_dates") {
+            const dates = await getDoctorAnnouncementDates(session.userId);
+            if (!dates) return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+            return NextResponse.json({ dates });
         }
 
         const targetModeRaw = (url.searchParams.get("targetMode") || "TODAY").toUpperCase();
