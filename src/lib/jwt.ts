@@ -5,7 +5,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "SUPER_SECRET_KEY";
 export interface JWTPayload {
   userId: number;
   email?: string;
-  role: "SUPER_ADMIN" | "ADMIN" | "DOCTOR" | "PATIENT";
+  role: "SUPER_ADMIN" | "ADMIN" | "DOCTOR" | "PATIENT" | "CLINIC_STAFF";
   patientId?: number;
 }
 

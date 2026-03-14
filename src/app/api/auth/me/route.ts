@@ -24,6 +24,14 @@ export async function GET() {
                         admin_id: true,
                     },
                 },
+                clinic_staff: {
+                    select: {
+                        staff_role: true,
+                        clinic_id: true,
+                        doctor_id: true,
+                        status: true,
+                    },
+                },
             },
         });
 
@@ -31,7 +39,15 @@ export async function GET() {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        return NextResponse.json({ user });
+        // For CLINIC_STAFF, include staff-specific role in the response
+        const responseUser = {
+            ...user,
+            staff_role: user.clinic_staff?.staff_role || null,
+            staff_clinic_id: user.clinic_staff?.clinic_id || null,
+            staff_doctor_id: user.clinic_staff?.doctor_id || null,
+        };
+
+        return NextResponse.json({ user: responseUser });
     } catch (error) {
         console.error("Get me error:", error);
         return NextResponse.json(
@@ -40,3 +56,4 @@ export async function GET() {
         );
     }
 }
+

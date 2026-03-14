@@ -49,11 +49,38 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        // Check Clinic Staff validity
+        if (user.role === "CLINIC_STAFF") {
+            const staff = await prisma.clinic_staff.findUnique({
+                where: { user_id: user.user_id }
+            });
+
+            if (!staff || staff.status !== "ACTIVE") {
+                return NextResponse.json({ error: "Your account is inactive or not found." }, { status: 403 });
+            }
+
+            // Compare only date parts (YYYY-MM-DD) to avoid UTC vs local timezone issues
+            const todayStr = new Date().toISOString().split("T")[0]; // e.g. "2026-03-14"
+
+            if (staff.valid_from) {
+                const fromStr = new Date(staff.valid_from).toISOString().split("T")[0];
+                if (fromStr > todayStr) {
+                    return NextResponse.json({ error: "Your account access has not started yet." }, { status: 403 });
+                }
+            }
+            if (staff.valid_to) {
+                const toStr = new Date(staff.valid_to).toISOString().split("T")[0];
+                if (toStr < todayStr) {
+                    return NextResponse.json({ error: "Your account access has expired." }, { status: 403 });
+                }
+            }
+        }
+
         // Generate JWT
         const token = generateToken({
             userId: user.user_id,
             email: user.email!,
-            role: user.role as "SUPER_ADMIN" | "ADMIN" | "DOCTOR",
+            role: user.role as "SUPER_ADMIN" | "ADMIN" | "DOCTOR" | "CLINIC_STAFF",
         });
 
         const response = NextResponse.json({

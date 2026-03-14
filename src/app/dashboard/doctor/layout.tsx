@@ -10,10 +10,10 @@ export default async function DoctorLayout({
 }) {
     const session = await getSession();
 
-    if (!session || session.role !== "DOCTOR") {
+    if (!session || (session.role !== "DOCTOR" && session.role !== "CLINIC_STAFF")) {
         redirect("/login");
     }
-    const userName = session.email?.split("@")[0] || "Doctor";
+    const userName = session.email?.split("@")[0] || (session.role === "DOCTOR" ? "Doctor" : "Staff");
 
     return (
         <div className="dashboard-layout">

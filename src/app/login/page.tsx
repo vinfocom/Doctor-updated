@@ -26,7 +26,7 @@ export default function LoginPage() {
 
             const role = data.user.role;
             if (role === "SUPER_ADMIN" || role === "ADMIN") router.push("/dashboard/admin");
-            else if (role === "DOCTOR") router.push("/dashboard/doctor");
+            else if (role === "DOCTOR" || role === "CLINIC_STAFF") router.push("/dashboard/doctor");
             else router.push("/dashboard/admin");
         } catch {
             setError("Something went wrong");

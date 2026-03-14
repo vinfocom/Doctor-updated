@@ -61,12 +61,26 @@ export default function DoctorDashboard() {
     const [recentAppointments, setRecentAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const [userRole, setUserRole] = useState("DOCTOR");
+
     const fetchData = useCallback(async () => {
         try {
-            const doctorRes = await fetch("/api/doctors/me");
-            if (doctorRes.ok) {
-                const doctorData = await doctorRes.json();
-                setUser({ name: doctorData.doctor.doctor_name });
+            // Always fetch current user info first to determine the role
+            const meRes = await fetch("/api/auth/me");
+            if (!meRes.ok) return;
+            const meData = await meRes.json();
+            const currentRole = meData.user?.role;
+            setUserRole(currentRole);
+
+            if (currentRole === "DOCTOR") {
+                const doctorRes = await fetch("/api/doctors/me");
+                if (doctorRes.ok) {
+                    const doctorData = await doctorRes.json();
+                    setUser({ name: doctorData.doctor.doctor_name || meData.user?.name || "Doctor" });
+                }
+            } else {
+                // For CLINIC_STAFF use the name from users table
+                setUser({ name: meData.user?.name || "Staff" });
             }
 
             // Role-based filtering is handled automatically by the API
@@ -169,9 +183,11 @@ export default function DoctorDashboard() {
 
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                 <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-                    Welcome Back, Dr. {user.name}
+                    {userRole === "CLINIC_STAFF" ? `Welcome, ${user.name}` : `Welcome Back, Dr. ${user.name}`}
                 </h1>
-                <p className="text-gray-500 mt-2 text-lg">Here&apos;s your practice overview.</p>
+                <p className="text-gray-500 mt-2 text-lg">
+                    {userRole === "CLINIC_STAFF" ? "Here's your clinic appointment overview." : "Here's your practice overview."}
+                </p>
             </motion.div>
 
             {/* 4-column stat cards */}

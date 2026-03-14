@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 interface SidebarProps {
-    role: "SUPER_ADMIN" | "ADMIN" | "DOCTOR";
+    role: "SUPER_ADMIN" | "ADMIN" | "DOCTOR" | "CLINIC_STAFF";
     userName: string;
 }
 
@@ -39,7 +39,7 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
             { href: "/dashboard/admin/patients", label: "Patients", icon: <Users size={20} /> },
             { href: "/dashboard/admin/clinics", label: "Clinics", icon: <Building2 size={20} /> },
             { href: "/dashboard/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-            
+
         ],
         ADMIN: [
             { href: "/dashboard/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -47,17 +47,22 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
             { href: "/dashboard/admin/patients", label: "Patients", icon: <Users size={20} /> },
             { href: "/dashboard/admin/clinics", label: "Clinics", icon: <Building2 size={20} /> },
             { href: "/dashboard/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-            
+
+        ],
+        CLINIC_STAFF: [
+            { href: "/dashboard/doctor", label: "Overview", icon: <LayoutDashboard size={20} /> },
+            { href: "/dashboard/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
         ],
         DOCTOR: [
             { href: "/dashboard/doctor", label: "Overview", icon: <LayoutDashboard size={20} /> },
-           
+
             { href: "/dashboard/doctor/clinics", label: "My Clinics", icon: <Building2 size={20} /> },
             { href: "/dashboard/doctor/schedule", label: "Schedule", icon: <Clock size={20} /> },
-             { href: "/dashboard/doctor/appointments", label: "My Appointments", icon: <Calendar size={20} /> },
-              {href:"/dashboard/doctor/patients",label:"Patients",icon:<Users size={20} />},
-            {href: "/dashboard/doctor/profile", label: "Profile", icon: <UserPlus size={20} /> },
-           
+            { href: "/dashboard/doctor/appointments", label: "My Appointments", icon: <Calendar size={20} /> },
+            { href: "/dashboard/doctor/patients", label: "Patients", icon: <Users size={20} /> },
+            { href: "/dashboard/doctor/users", label: "Users", icon: <UserPlus size={20} /> },
+            { href: "/dashboard/doctor/profile", label: "Profile", icon: <UserPlus size={20} /> },
+
         ],
     };
 

@@ -130,6 +130,9 @@ export default function DoctorAppointmentsPage() {
     const [customFrom, setCustomFrom] = useState("");
     const [customTo, setCustomTo] = useState("");
 
+    const [userRole, setUserRole] = useState<string>("DOCTOR");
+    const [staffRole, setStaffRole] = useState<string>("");
+
     const fetchData = useCallback(async () => {
         try {
             const params = new URLSearchParams();
@@ -164,8 +167,11 @@ export default function DoctorAppointmentsPage() {
             const [meRes, aptRes] = await Promise.all([fetch("/api/auth/me"), fetch(appointmentsUrl)]);
             if (!meRes.ok) { router.push("/login"); return; }
             const meData = await meRes.json();
-            if (meData.user.role !== "DOCTOR") { router.push("/login"); return; }
+            // Allow both DOCTOR and CLINIC_STAFF
+            if (meData.user.role !== "DOCTOR" && meData.user.role !== "CLINIC_STAFF") { router.push("/login"); return; }
             setUser(meData.user);
+            setUserRole(meData.user.role);
+            setStaffRole(meData.user.staff_role || "");
             if (aptRes.ok) { const data = await aptRes.json(); setAppointments(data || []); }
         } catch { router.push("/login"); } finally { setLoading(false); }
     }, [router, datePreset, customFrom, customTo, statusFilter]);
@@ -199,22 +205,27 @@ export default function DoctorAppointmentsPage() {
         <div className="w-full">
             <div className="flex justify-between items-center mb-10">
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-                    <h1 className="text-3xl font-bold text-gray-900">My Appointments</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Manage your patient appointments</p>
+                    <h1 className="text-3xl font-bold text-gray-900">Appointments</h1>
+                    <p className="text-gray-500 mt-1 text-sm">
+                        {userRole === "CLINIC_STAFF" ? "Viewing clinic appointments" : "Manage your patient appointments"}
+                    </p>
                 </motion.div>
-                <motion.button
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsModalOpen(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-lg shadow-indigo-200 font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                    </svg>
-                    Add Appointment
-                </motion.button>
+                {/* Only DOCTOR or HAVE_ACCESS staff can add appointments */}
+                {(userRole === "DOCTOR" || (userRole === "CLINIC_STAFF" && staffRole === "HAVE_ACCESS")) && (
+                    <motion.button
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setIsModalOpen(true)}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-lg shadow-indigo-200 font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Appointment
+                    </motion.button>
+                )}
             </div>
 
             <motion.div
@@ -234,11 +245,10 @@ export default function DoctorAppointmentsPage() {
                                     key={preset}
                                     type="button"
                                     onClick={() => setDatePreset(preset)}
-                                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        datePreset === preset
-                                            ? "bg-indigo-600 text-white"
-                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
+                                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${datePreset === preset
+                                        ? "bg-indigo-600 text-white"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                        }`}
                                 >
                                     {preset === "ALL"
                                         ? "All Time"
@@ -431,7 +441,8 @@ export default function DoctorAppointmentsPage() {
                                         </td>
                                         <td>
                                             <div className="flex gap-2">
-                                                {apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && apt.status !== "PENDING" && (
+                                                {/* Only show action buttons for DOCTOR or HAVE_ACCESS staff */}
+                                                {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && apt.status !== "PENDING" && (
                                                     <>
                                                         <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "COMPLETED")} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Complete" aria-label="Complete">
                                                             <Check size={16} />
@@ -447,16 +458,23 @@ export default function DoctorAppointmentsPage() {
                                                         </motion.button>
                                                     </>
                                                 )}
-                                                <motion.button
-                                                    onClick={() => setDeleteAppointment(apt)}
-                                                    className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                                                    whileHover={{ scale: 1.05 }}
-                                                    whileTap={{ scale: 0.95 }}
-                                                    title="Delete"
-                                                    aria-label="Delete"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </motion.button>
+                                                {/* Only DOCTOR or HAVE_ACCESS staff can delete */}
+                                                {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && (
+                                                    <motion.button
+                                                        onClick={() => setDeleteAppointment(apt)}
+                                                        className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                                                        whileHover={{ scale: 1.05 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                        title="Delete"
+                                                        aria-label="Delete"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </motion.button>
+                                                )}
+                                                {/* VIEWER staff only see status badge, no actions */}
+                                                {userRole === "CLINIC_STAFF" && staffRole !== "HAVE_ACCESS" && (
+                                                    <span className="text-xs text-gray-400 italic">View only</span>
+                                                )}
                                             </div>
                                         </td>
 
