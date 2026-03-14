@@ -44,6 +44,7 @@ export async function GET(req: Request) {
                 appointment_id: true,
                 appointment_date: true,
                 status: true,
+                cancelled_by: true,
                 start_time: true,
                 patient: {
                     select: {
@@ -96,6 +97,7 @@ export async function GET(req: Request) {
             dayMap[dateKey].appointments.push({
                 appointment_id: apt.appointment_id,
                 status: apt.status,
+                cancelled_by: apt.cancelled_by,
                 start_time_display: startDisplay,
                 patient_name: apt.patient?.full_name || "Unknown",
                 patient_phone: apt.patient?.phone || "",
