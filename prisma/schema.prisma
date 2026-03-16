@@ -424,6 +424,7 @@ model clinic_staff {
   doctor_id  Int
   clinic_id  Int?
   user_id    Int       @unique
+  whatsapp_number String? @db.VarChar(255)
   staff_role String    @db.VarChar(20)
   status     String    @default("ACTIVE") @db.VarChar(20)
   valid_from DateTime? @db.Date

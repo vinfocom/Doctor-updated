@@ -17,6 +17,7 @@ interface StaffUser {
     created_at: string;
     clinic_id: number | null;
     clinic_name: string | null;
+    doctor_whatsapp_number?: string | null;
 }
 
 interface Clinic {
@@ -41,6 +42,7 @@ export default function UsersViewPage() {
         is_limited: false,
         valid_from: "",
         valid_to: "",
+        doctor_whatsapp_number: "",
     });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
@@ -105,6 +107,7 @@ export default function UsersViewPage() {
             is_limited: !!(user.valid_from || user.valid_to),
             valid_from: user.valid_from ? user.valid_from.split("T")[0] : "",
             valid_to: user.valid_to ? user.valid_to.split("T")[0] : "",
+            doctor_whatsapp_number: user.doctor_whatsapp_number || "",
         });
     };
 
@@ -332,6 +335,16 @@ export default function UsersViewPage() {
                                         <option key={c.clinic_id} value={c.clinic_id}>{c.clinic_name}</option>
                                     ))}
                                 </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Doctor WhatsApp Number</label>
+                                <input
+                                    type="tel"
+                                    value={editForm.doctor_whatsapp_number}
+                                    onChange={(e) => setEditForm({ ...editForm, doctor_whatsapp_number: e.target.value })}
+                                    placeholder="+91 98765 43210"
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                                />
                             </div>
 
                             {/* Limited Access Toggle */}

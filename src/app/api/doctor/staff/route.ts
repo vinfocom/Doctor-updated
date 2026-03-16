@@ -41,7 +41,8 @@ export async function GET(req: Request) {
             valid_to: staff.valid_to,
             created_at: staff.created_at,
             clinic_id: staff.clinic_id,
-            clinic_name: staff.clinics?.clinic_name || null
+            clinic_name: staff.clinics?.clinic_name || null,
+            doctor_whatsapp_number: staff.whatsapp_number || null
         }));
 
         return NextResponse.json({ staff: formattedStaff });
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { username, email, password, role, status, is_limited, valid_from, valid_to, clinic_id } = body;
+        const { username, email, password, role, status, is_limited, valid_from, valid_to, clinic_id, doctor_whatsapp_number } = body;
 
         // Basic validation
         if (!email || !role || !username) {
@@ -97,6 +98,7 @@ export async function POST(req: Request) {
             const fromDate = is_limited && valid_from ? new Date(valid_from) : null;
             const toDate = is_limited && valid_to ? new Date(valid_to) : null;
 
+            const trimmedNumber = String(doctor_whatsapp_number || "").trim();
             const clinicStaff = await tx.clinic_staff.create({
                 data: {
                     doctor_id: doctor.doctor_id,
@@ -105,9 +107,30 @@ export async function POST(req: Request) {
                     staff_role: role,
                     status: status || "ACTIVE",
                     valid_from: fromDate,
-                    valid_to: toDate
+                    valid_to: toDate,
+                    whatsapp_number: trimmedNumber || null
                 }
             });
+
+            if (trimmedNumber) {
+                const existing = await tx.doctor_whatsapp_numbers.findFirst({
+                    where: { doctor_id: doctor.doctor_id, whatsapp_number: trimmedNumber }
+                });
+                if (!existing) {
+                    const doctorWithChat = await tx.doctors.findUnique({
+                        where: { doctor_id: doctor.doctor_id },
+                        select: { chat_id: true }
+                    });
+                    await tx.doctor_whatsapp_numbers.create({
+                        data: {
+                            doctor_id: doctor.doctor_id,
+                            whatsapp_number: trimmedNumber,
+                            is_primary: false,
+                            chat_id: doctorWithChat?.chat_id ?? null
+                        }
+                    });
+                }
+            }
 
             return { user: newUser, staff: clinicStaff };
         });

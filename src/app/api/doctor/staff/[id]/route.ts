@@ -23,7 +23,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const resolvedParams = await props.params;
         const staffId = parseInt(resolvedParams.id);
         const body = await req.json();
-        const { username, role, status, is_limited, valid_from, valid_to, clinic_id } = body;
+        const { username, role, status, is_limited, valid_from, valid_to, clinic_id, doctor_whatsapp_number } = body;
 
         const existingStaff = await prisma.clinic_staff.findUnique({
             where: { staff_id: staffId },
@@ -45,6 +45,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                 });
             }
 
+            const trimmedNumber = String(doctor_whatsapp_number || "").trim();
             await tx.clinic_staff.update({
                 where: { staff_id: staffId },
                 data: {
@@ -52,9 +53,32 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                     status: status || existingStaff.status,
                     valid_from: fromDate,
                     valid_to: toDate,
-                    clinic_id: clinic_id ? parseInt(clinic_id) : null
+                    ...(clinic_id
+                        ? { clinics: { connect: { clinic_id: parseInt(clinic_id) } } }
+                        : { clinics: { disconnect: true } }),
+                    whatsapp_number: trimmedNumber || null
                 }
             });
+
+            if (trimmedNumber) {
+                const existing = await tx.doctor_whatsapp_numbers.findFirst({
+                    where: { doctor_id: doctor.doctor_id, whatsapp_number: trimmedNumber }
+                });
+                if (!existing) {
+                    const doctorWithChat = await tx.doctors.findUnique({
+                        where: { doctor_id: doctor.doctor_id },
+                        select: { chat_id: true }
+                    });
+                    await tx.doctor_whatsapp_numbers.create({
+                        data: {
+                            doctor_id: doctor.doctor_id,
+                            whatsapp_number: trimmedNumber,
+                            is_primary: false,
+                            chat_id: doctorWithChat?.chat_id ?? null
+                        }
+                    });
+                }
+            }
         });
 
         return NextResponse.json({ success: true });

@@ -1,0 +1,1 @@
+-- Baseline placeholder: this migration was already applied to the database.

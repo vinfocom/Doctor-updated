@@ -20,7 +20,8 @@ export default function AddUserPage() {
         clinic_id: "",
         is_limited: false,
         valid_from: "",
-        valid_to: ""
+        valid_to: "",
+        doctor_whatsapp_number: ""
     });
 
     useEffect(() => {
@@ -181,6 +182,18 @@ export default function AddUserPage() {
                                 ))}
                             </select>
                             <p className="text-xs text-gray-400">Select which clinic this staff can access</p>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Doctor WhatsApp Number</label>
+                            <input
+                                type="tel"
+                                name="doctor_whatsapp_number"
+                                value={formData.doctor_whatsapp_number}
+                                onChange={handleChange}
+                                placeholder="+91 98765 43210"
+                                className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
+                            />
+                            <p className="text-xs text-gray-400">This number will be stored in the doctor WhatsApp list.</p>
                         </div>
                     </div>
                 </motion.div>
