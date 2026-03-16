@@ -28,12 +28,17 @@ export async function GET(req: NextRequest) {
                 whatsapp_numbers: true,
             },
         });
+        const jsonSafe = <T,>(value: T): T =>
+            JSON.parse(
+                JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v))
+            ) as T;
+
         const serializedDoctors = doctors.map(doc => ({
             ...doc,
             chat_id: doc.chat_id ? String(doc.chat_id) : null,
         }));
 
-        return NextResponse.json({ doctors: serializedDoctors });
+        return NextResponse.json({ doctors: jsonSafe(serializedDoctors) });
     } catch (error: any) {
         console.error("Get doctors error:", error);
         return NextResponse.json(
@@ -111,6 +116,17 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: "doctor_id required" }, { status: 400 });
         }
 
+        // Safely convert chat_id to BigInt; empty / non-numeric strings become null or ignored
+        let chatIdValue: bigint | null | undefined = undefined;
+        if (chat_id !== undefined) {
+            const trimmed = String(chat_id).trim();
+            if (trimmed === "" || trimmed === "null") {
+                chatIdValue = null;
+            } else if (/^-?\d+$/.test(trimmed)) {
+                chatIdValue = BigInt(trimmed);
+            }
+        }
+
         const updated = await prisma.$transaction(async (tx) => {
             const doc = await tx.doctors.update({
                 where: { doctor_id: Number(doctor_id) },
@@ -125,7 +141,7 @@ export async function PATCH(req: NextRequest) {
                     ...(registration_no !== undefined && { registration_no: registration_no || null }),
                     ...(education !== undefined && { education: education || null }),
                     ...(document_url !== undefined && { document_url: document_url || null }),
-                    ...(chat_id !== undefined && { chat_id: chat_id ? BigInt(chat_id) : null }),
+                    ...(chatIdValue !== undefined && { chat_id: chatIdValue }),
                     ...(profile_pic_url !== undefined && { profile_pic_url: profile_pic_url || null }),
                     ...(active_from !== undefined && { active_from: active_from ? new Date(active_from) : null }),
                     ...(active_to !== undefined && { active_to: active_to ? new Date(active_to) : null }),
@@ -143,9 +159,16 @@ export async function PATCH(req: NextRequest) {
                             doctor_id: Number(doctor_id),
                             whatsapp_number: wn.whatsapp_number,
                             is_primary: i === 0,
+                            chat_id: doc.chat_id ?? null,
                         })),
                     });
                 }
+            }
+            if (chatIdValue !== undefined && !Array.isArray(whatsapp_numbers)) {
+                await tx.doctor_whatsapp_numbers.updateMany({
+                    where: { doctor_id: Number(doctor_id) },
+                    data: { chat_id: chatIdValue },
+                });
             }
 
             return doc;
@@ -157,9 +180,14 @@ export async function PATCH(req: NextRequest) {
             include: { whatsapp_numbers: true },
         });
 
+        const jsonSafe = <T,>(value: T): T =>
+            JSON.parse(
+                JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v))
+            ) as T;
+
         return NextResponse.json({
             message: "Doctor updated successfully",
-            doctor: { ...full, chat_id: full?.chat_id ? String(full.chat_id) : null },
+            doctor: jsonSafe({ ...full, chat_id: full?.chat_id ? String(full.chat_id) : null }),
         });
     } catch (error) {
         console.error("Update doctor error:", error);

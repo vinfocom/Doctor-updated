@@ -167,10 +167,17 @@ export async function PATCH(req: Request) {
                             .map((w: any) => ({
                                 doctor_id: doctor.doctor_id,
                                 whatsapp_number: w.whatsapp_number.trim(),
-                                is_primary: w.is_primary || false
+                                is_primary: w.is_primary || false,
+                                chat_id: updatedDoctor.chat_id ?? null,
                             }))
                     });
                 }
+            }
+            if (chatIdValue !== undefined && !Array.isArray(whatsapp_numbers)) {
+                await tx.doctor_whatsapp_numbers.updateMany({
+                    where: { doctor_id: doctor.doctor_id },
+                    data: { chat_id: chatIdValue },
+                });
             }
 
             return updatedDoctor;

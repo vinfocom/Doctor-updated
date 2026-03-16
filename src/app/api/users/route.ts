@@ -77,6 +77,10 @@ export async function POST(req: Request) {
                     adminId = superAdminProfile?.admin_id ?? 1;
                 }
 
+                const resolvedChatId = specific_details?.chat_id
+                    ? BigInt(specific_details.chat_id)
+                    : BigInt(Math.floor(Date.now() / 1000) + newUser.user_id);
+
                 const doctor = await tx.doctors.create({
                     data: {
                         doctor_name: name,
@@ -90,9 +94,7 @@ export async function POST(req: Request) {
                             email.split("@")[0] ||
                             `doctor_${newUser.user_id}`
                         ),
-                        chat_id: specific_details?.chat_id
-                            ? BigInt(specific_details.chat_id)
-                            : BigInt(Math.floor(Date.now() / 1000) + newUser.user_id),
+                        chat_id: resolvedChatId,
                         gst_number: specific_details?.gst_number || null,
                         pan_number: specific_details?.pan_number || null,
                         address: specific_details?.address || null,
@@ -115,6 +117,7 @@ export async function POST(req: Request) {
                             doctor_id: doctor.doctor_id,
                             whatsapp_number: wn.whatsapp_number,
                             is_primary: i === 0,
+                            chat_id: resolvedChatId,
                         })),
                     });
                 }
