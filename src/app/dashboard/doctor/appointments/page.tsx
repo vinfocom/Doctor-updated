@@ -10,7 +10,7 @@ interface Appointment {
     status: string;
     cancelled_by?: string | null;
     rescheduled_by?: string | null;
-    patient: { full_name: string; phone: string; symptoms?: string } | null;
+    patient: { full_name: string; phone: string; symptoms?: string; booking_id?: number | null } | null;
     clinic?: { clinic_id: number; clinic_name: string } | null;
     appointment_date: string;
     start_time: string;
@@ -405,7 +405,7 @@ export default function DoctorAppointmentsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="data-table">
-                            <thead><tr><th>Patient</th><th>Phone</th><th>Date & Time</th><th>Status</th><th>Actions</th></tr></thead>
+                            <thead><tr><th>Patient</th><th>Appointment No.</th><th>Phone</th><th>Date & Time</th><th>Status</th><th>Actions</th></tr></thead>
                             <tbody>
                                 {appointments.map((apt, i) => (
                                     <motion.tr key={apt.appointment_id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}>
@@ -416,6 +416,9 @@ export default function DoctorAppointmentsPage() {
                                                 </div>
                                                 <span className="text-gray-800 font-medium">{apt.patient?.full_name || "N/A"}</span>
                                             </div>
+                                        </td>
+                                        <td className="text-gray-500 font-medium">
+                                            {apt.patient?.booking_id ?? apt.appointment_id}
                                         </td>
                                         <td className="text-gray-500">{apt.patient?.phone || "N/A"}</td>
                                         <td className="text-gray-500">
