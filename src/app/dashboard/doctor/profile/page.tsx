@@ -297,6 +297,16 @@ export default function DoctorProfilePage() {
                             <div className="text-center">
                                 <p className="font-bold text-gray-900 text-lg">{profile?.doctor_name || "—"}</p>
                                 <p className="text-sm text-indigo-600">{profile?.specialization || "—"}</p>
+                                {profile?.profile_pic_url && (
+                                    <a
+                                        href={profile.profile_pic_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                                    >
+                                        <Eye className="w-3.5 h-3.5" /> View profile photo
+                                    </a>
+                                )}
                                 <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${profile?.status === "ACTIVE"
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "bg-gray-100 text-gray-600"

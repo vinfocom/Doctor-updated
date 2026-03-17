@@ -213,7 +213,7 @@ export default function AdminDoctorsPage() {
     const [statusToggleActiveTo, setStatusToggleActiveTo] = useState("");
     const [statusToggleError, setStatusToggleError] = useState("");
 
-    /* ────── Generic cloudinary upload helper ────── */
+    /* ────── Generic file upload helper ────── */
     const uploadFile = async (
         file: File,
         setFile: (f: File | null) => void,
