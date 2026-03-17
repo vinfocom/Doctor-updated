@@ -8,7 +8,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import {
     Plus, X, Pencil, Trash2, Building2, ChevronDown,
-    MapPin, Phone, Calendar, Power, AlertTriangle, Stethoscope, Search
+    MapPin, Phone, Calendar, Power, AlertTriangle, Stethoscope, Search, QrCode
 } from "lucide-react";
 
 /* ───────── Types ───────── */
@@ -60,18 +60,12 @@ export default function AdminClinicsPage() {
     const [addSubmitting, setAddSubmitting] = useState(false);
     const [addError, setAddError] = useState("");
     const [addDoctorLocked, setAddDoctorLocked] = useState(false); // lock doctor dropdown when opened from a group
-    const barcodeFileRef = React.useRef<HTMLInputElement | null>(null);
-    const [barcodeUploading, setBarcodeUploading] = useState(false);
-    const [barcodeUploadError, setBarcodeUploadError] = useState("");
 
     // Edit modal
     const [editClinic, setEditClinic] = useState<Clinic | null>(null);
     const [editForm, setEditForm] = useState(EMPTY_FORM);
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editError, setEditError] = useState("");
-    const editBarcodeFileRef = React.useRef<HTMLInputElement | null>(null);
-    const [editBarcodeUploading, setEditBarcodeUploading] = useState(false);
-    const [editBarcodeUploadError, setEditBarcodeUploadError] = useState("");
 
     // Delete confirm
     const [deleteClinic, setDeleteClinic] = useState<Clinic | null>(null);
@@ -165,44 +159,7 @@ export default function AdminClinicsPage() {
         setAddForm({ ...EMPTY_FORM, doctor_id: String(doctorId) });
         setAddDoctorLocked(true);
         setAddError("");
-        setBarcodeUploadError("");
         setShowAdd(true);
-    };
-
-    const uploadClinicBarcode = async (file: File) => {
-        setBarcodeUploadError("");
-        setBarcodeUploading(true);
-        try {
-            const fd = new FormData();
-            fd.append("file", file);
-            const res = await fetch("/api/clinics/upload", { method: "POST", body: fd });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || "Upload failed");
-            setAddForm(prev => ({ ...prev, barcode_url: data.url || "" }));
-        } catch (e: any) {
-            setBarcodeUploadError(e?.message || "Upload failed");
-        } finally {
-            setBarcodeUploading(false);
-            if (barcodeFileRef.current) barcodeFileRef.current.value = "";
-        }
-    };
-
-    const uploadEditClinicBarcode = async (file: File) => {
-        setEditBarcodeUploadError("");
-        setEditBarcodeUploading(true);
-        try {
-            const fd = new FormData();
-            fd.append("file", file);
-            const res = await fetch("/api/clinics/upload", { method: "POST", body: fd });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || "Upload failed");
-            setEditForm(prev => ({ ...prev, barcode_url: data.url || "" }));
-        } catch (e: any) {
-            setEditBarcodeUploadError(e?.message || "Upload failed");
-        } finally {
-            setEditBarcodeUploading(false);
-            if (editBarcodeFileRef.current) editBarcodeFileRef.current.value = "";
-        }
     };
 
     /* ────── Add clinic ────── */
@@ -219,7 +176,6 @@ export default function AdminClinicsPage() {
                     phone: addForm.phone,
                     doctor_id: addForm.doctor_id ? Number(addForm.doctor_id) : null,
                     status: addForm.status,
-                    barcode_url: addForm.barcode_url || null,
                 }),
             });
             if (res.ok) {
@@ -227,7 +183,6 @@ export default function AdminClinicsPage() {
                 setShowAdd(false);
                 setAddForm(EMPTY_FORM);
                 setAddDoctorLocked(false);
-                setBarcodeUploadError("");
                 await fetchData();
                 // Auto-expand the doctor group for the new clinic
                 if (docId) {
@@ -253,7 +208,6 @@ export default function AdminClinicsPage() {
             barcode_url: c.barcode_url || "",
         });
         setEditError("");
-        setEditBarcodeUploadError("");
     };
 
     /* ────── Submit edit ────── */
@@ -270,7 +224,6 @@ export default function AdminClinicsPage() {
                     location: editForm.location,
                     phone: editForm.phone,
                     status: editForm.status,
-                    barcode_url: editForm.barcode_url || null,
                 }),
             });
             if (res.ok) {
@@ -291,6 +244,22 @@ export default function AdminClinicsPage() {
             const res = await fetch(`/api/clinics/${deleteClinic.clinic_id}`, { method: "DELETE" });
             if (res.ok) { setDeleteClinic(null); await fetchData(); }
         } catch { /* ignore */ }
+    };
+
+    const handleGenerateBarcode = async (doctor_id: number | null | undefined, clinic_id: number) => {
+        try {
+            const docId = doctor_id || "";
+            const url = `https://msgbot.duckdns.org/qr/checkin?doctor_id=${docId}&clinic_id=${clinic_id}`;
+            await fetch(`/api/clinics/${clinic_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ barcode_url: url })
+            });
+            window.open(url, "_blank");
+            fetchData();
+        } catch (e) {
+            console.error("Error generating barcode", e);
+        }
     };
 
     /* ────── Status toggle ────── */
@@ -536,6 +505,13 @@ export default function AdminClinicsPage() {
                                                                         </td>
                                                                         <td className="px-4 py-3">
                                                                             <div className="flex items-center gap-1.5">
+                                                                                <button
+                                                                                    onClick={() => handleGenerateBarcode(group.doctor.doctor_id, c.clinic_id)}
+                                                                                    className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                                                                    title="Generate Bar Code"
+                                                                                >
+                                                                                    <QrCode size={14} />
+                                                                                </button>
                                                                                 <motion.button
                                                                                     onClick={() => openEdit(c)}
                                                                                     className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
@@ -620,6 +596,13 @@ export default function AdminClinicsPage() {
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            onClick={() => handleGenerateBarcode(c.doctor_id, c.clinic_id)}
+                                                            className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                                            title="Generate Bar Code"
+                                                        >
+                                                            <QrCode size={14} />
+                                                        </button>
                                                         <button onClick={() => openEdit(c)} className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"><Pencil size={14} /></button>
                                                         <button onClick={() => setDeleteClinic(c)} className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"><Trash2 size={14} /></button>
                                                     </div>
@@ -751,62 +734,6 @@ export default function AdminClinicsPage() {
                                         />
                                     </div>
 
-                                    {/* Barcode (upload by file/camera or URL) */}
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-medium text-gray-700">Barcode (optional)</label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="url"
-                                                value={addForm.barcode_url}
-                                                onChange={(e) => setAddForm({ ...addForm, barcode_url: e.target.value })}
-                                                className="input-field w-full"
-                                                placeholder="Paste barcode image URL (https://...)"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => barcodeFileRef.current?.click()}
-                                                disabled={barcodeUploading}
-                                                className="shrink-0 px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-60"
-                                                title="Upload barcode image (file/camera)"
-                                            >
-                                                {barcodeUploading ? "Uploading…" : "Upload"}
-                                            </button>
-                                        </div>
-                                        <input
-                                            ref={barcodeFileRef}
-                                            type="file"
-                                            accept="image/*"
-                                            capture="environment"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const f = e.target.files?.[0];
-                                                if (f) uploadClinicBarcode(f);
-                                            }}
-                                        />
-                                        {addForm.barcode_url && (
-                                            <div className="flex items-center justify-between">
-                                                <a
-                                                    href={addForm.barcode_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-xs text-indigo-600 hover:text-indigo-800 underline"
-                                                >
-                                                    View current barcode
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setAddForm(prev => ({ ...prev, barcode_url: "" }))}
-                                                    className="text-xs text-gray-400 hover:text-red-500"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        )}
-                                        {barcodeUploadError && (
-                                            <p className="text-xs text-red-500">{barcodeUploadError}</p>
-                                        )}
-                                    </div>
-
                                     {/* Status */}
                                     <div className="space-y-1">
                                         <label className="text-sm font-medium text-gray-700">Status</label>
@@ -826,7 +753,7 @@ export default function AdminClinicsPage() {
 
                                     <div className="flex justify-end gap-3 pt-2">
                                         <PremiumButton type="button" variant="ghost" onClick={() => { setShowAdd(false); setAddDoctorLocked(false); }}>Cancel</PremiumButton>
-                                        <PremiumButton type="submit" disabled={addSubmitting || barcodeUploading}>
+                                        <PremiumButton type="submit" disabled={addSubmitting}>
                                             {addSubmitting ? "Saving…" : "Save Clinic"}
                                         </PremiumButton>
                                     </div>
@@ -880,61 +807,6 @@ export default function AdminClinicsPage() {
                                             className="input-field w-full" placeholder="+91 98765 43210" />
                                     </div>
 
-                                    {/* Barcode (upload by file/camera or URL) */}
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-medium text-gray-700">Barcode (optional)</label>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="url"
-                                                value={editForm.barcode_url}
-                                                onChange={(e) => setEditForm({ ...editForm, barcode_url: e.target.value })}
-                                                className="input-field w-full"
-                                                placeholder="Paste barcode image URL (https://...)"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => editBarcodeFileRef.current?.click()}
-                                                disabled={editBarcodeUploading}
-                                                className="shrink-0 px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 disabled:opacity-60"
-                                                title="Upload barcode image (file/camera)"
-                                            >
-                                                {editBarcodeUploading ? "Uploading…" : "Upload"}
-                                            </button>
-                                        </div>
-                                        <input
-                                            ref={editBarcodeFileRef}
-                                            type="file"
-                                            accept="image/*"
-                                            capture="environment"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const f = e.target.files?.[0];
-                                                if (f) uploadEditClinicBarcode(f);
-                                            }}
-                                        />
-                                        {editForm.barcode_url && (
-                                            <div className="flex items-center justify-between">
-                                                <a
-                                                    href={editForm.barcode_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-xs text-indigo-600 hover:text-indigo-800 underline"
-                                                >
-                                                    View current barcode
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setEditForm(prev => ({ ...prev, barcode_url: "" }))}
-                                                    className="text-xs text-gray-400 hover:text-red-500"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        )}
-                                        {editBarcodeUploadError && (
-                                            <p className="text-xs text-red-500">{editBarcodeUploadError}</p>
-                                        )}
-                                    </div>
                                     <div className="space-y-1">
                                         <label className="text-sm font-medium text-gray-700">Status</label>
                                         <select value={editForm.status}
@@ -951,7 +823,7 @@ export default function AdminClinicsPage() {
 
                                     <div className="flex justify-end gap-3 pt-2">
                                         <PremiumButton type="button" variant="ghost" onClick={() => setEditClinic(null)}>Cancel</PremiumButton>
-                                        <PremiumButton type="submit" disabled={editSubmitting || editBarcodeUploading}>
+                                        <PremiumButton type="submit" disabled={editSubmitting}>
                                             {editSubmitting ? "Saving…" : "Update Clinic"}
                                         </PremiumButton>
                                     </div>

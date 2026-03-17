@@ -138,7 +138,7 @@ export async function POST(req: Request) {
                     status: status || "ACTIVE",
                     admin_id,
                     doctor_id,
-                    barcode_url: barcode_url || null,
+                    barcode_url: null,
                 }
             });
 
