@@ -294,10 +294,10 @@ export default function DoctorAppointmentsPage() {
                                 onChange={(e) => setStatusFilter(e.target.value)}
                                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                             >
-                                <option value="ALL">All Statuses</option>
+                                <option value="ALL">All Status</option>
                                 <option value="BOOKED">Booked</option>
                                 <option value="PENDING">Not Visited</option>
-                                <option value="COMPLETED">Completed</option>
+                                <option value="COMPLETED">Visited</option>
                                 <option value="CANCELLED">Cancelled</option>
                             </select>
                         </div>

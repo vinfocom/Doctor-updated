@@ -22,6 +22,9 @@ export async function GET(req: Request) {
                 clinic: {
                     select: { clinic_id: true, clinic_name: true, location: true, phone: true },
                 },
+                patient: {
+                    select: { booking_id: true },
+                },
             },
             orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
         });
