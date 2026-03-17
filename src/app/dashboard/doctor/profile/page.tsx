@@ -44,6 +44,7 @@ interface DoctorProfile {
     clinics: Clinic[];
     // Extended fields
     chat_id?: string | null;
+    telegram_userid?: string | null;
     specialization?: string | null;
     education?: string | null;
     address?: string | null;
@@ -397,6 +398,22 @@ export default function DoctorProfilePage() {
                                     </div>
                                 </div>
 
+                                {/* Telegram User ID */}
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium text-gray-700">Telegram User ID</label>
+                                    <div className="relative">
+                                        <Send className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={profile?.telegram_userid || ""}
+                                            onChange={(e) => setProp("telegram_userid", e.target.value)}
+                                            className="input-field input-field-with-icon"
+                                            style={{ paddingLeft: "3rem" }}
+                                            placeholder="e.g. @doctor_smith"
+                                        />
+                                    </div>
+                                </div>
+
                                 {/* Specialization */}
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium text-gray-700">Specialization</label>
@@ -645,16 +662,16 @@ export default function DoctorProfilePage() {
                                                     return String(a.start_time).localeCompare(String(b.start_time));
                                                 })
                                                 .map((sch, i) => (
-                                                <div key={i} className="flex justify-between items-center text-sm">
-                                                    <span className="font-medium text-gray-700 w-8">
-                                                        {dayNames[((sch.day_of_week % 7) + 7) % 7] || "N/A"}
-                                                    </span>
-                                                    <div className="flex items-center gap-1 text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
-                                                        <Clock className="w-3 h-3" />
-                                                        <span>{convertTo12Hour(formatTime(sch.start_time))} - {convertTo12Hour(formatTime(sch.end_time))}</span>
+                                                    <div key={i} className="flex justify-between items-center text-sm">
+                                                        <span className="font-medium text-gray-700 w-8">
+                                                            {dayNames[((sch.day_of_week % 7) + 7) % 7] || "N/A"}
+                                                        </span>
+                                                        <div className="flex items-center gap-1 text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
+                                                            <Clock className="w-3 h-3" />
+                                                            <span>{convertTo12Hour(formatTime(sch.start_time))} - {convertTo12Hour(formatTime(sch.end_time))}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                ))
                                         ) : (
                                             <p className="text-sm text-gray-400 italic">No schedule set</p>
                                         )}

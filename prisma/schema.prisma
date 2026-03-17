@@ -73,6 +73,7 @@ model doctors {
   specialization         String?                   @db.VarChar(255)
   acceptDays             Int?
   chat_id                BigInt?                   @unique
+  telegram_userid        String?                   @db.VarChar(255)
   username               String?                   @db.VarChar(255)
   gst_number             String?                   @db.VarChar(255)
   pan_number             String?                   @db.VarChar(255)

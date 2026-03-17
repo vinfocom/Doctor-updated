@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest) {
         const {
             doctor_id, doctor_name, phone, whatsapp_number, specialization,
             gst_number, pan_number, address, registration_no, education, document_url,
-            chat_id, profile_pic_url, num_clinics, status, active_from, active_to,
+            chat_id, telegram_userid, profile_pic_url, num_clinics, status, active_from, active_to,
             whatsapp_numbers, // array of { whatsapp_number: string }
         } = body;
 
@@ -142,6 +142,7 @@ export async function PATCH(req: NextRequest) {
                     ...(education !== undefined && { education: education || null }),
                     ...(document_url !== undefined && { document_url: document_url || null }),
                     ...(chatIdValue !== undefined && { chat_id: chatIdValue }),
+                    ...(telegram_userid !== undefined && { telegram_userid: telegram_userid || null }),
                     ...(profile_pic_url !== undefined && { profile_pic_url: profile_pic_url || null }),
                     ...(active_from !== undefined && { active_from: active_from ? new Date(active_from) : null }),
                     ...(active_to !== undefined && { active_to: active_to ? new Date(active_to) : null }),

@@ -100,6 +100,7 @@ export async function PATCH(req: Request) {
             specialization,
             whatsapp_numbers,
             chat_id,
+            telegram_userid,
             gst_number,
             pan_number,
             address,
@@ -147,6 +148,7 @@ export async function PATCH(req: Request) {
         if (document_url !== undefined) updateData.document_url = document_url;
         if (profile_pic_url !== undefined) updateData.profile_pic_url = profile_pic_url;
         if (chatIdValue !== undefined) updateData.chat_id = chatIdValue;
+        if (telegram_userid !== undefined) updateData.telegram_userid = telegram_userid;
 
         const result = await prisma.$transaction(async (tx) => {
             const updatedDoctor = await tx.doctors.update({

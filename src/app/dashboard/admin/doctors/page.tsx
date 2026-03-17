@@ -22,6 +22,7 @@ interface Doctor {
     pan_number?: string | null;
     document_url?: string | null;
     chat_id?: string | null;
+    telegram_userid?: string | null;
     profile_pic_url?: string | null;
     active_from?: string | null;
     active_to?: string | null;
@@ -33,7 +34,7 @@ interface Doctor {
 const INITIAL_FORM = {
     name: "", email: "", password: "", role: "DOCTOR", phone: "", whatsapp_number: "",
     gst_number: "", pan_number: "", address: "", registration_no: "", education: "", specialization: "",
-    chat_id: "", num_clinics: "0", active_from: "", active_to: "",
+    chat_id: "", telegram_userid: "", num_clinics: "0", active_from: "", active_to: "",
 };
 
 const toDateInput = (value?: string | null) => {
@@ -139,6 +140,7 @@ function WhatsAppList({ numbers, onChange }: { numbers: string[]; onChange: (v: 
 function getPendingFields(doc: Doctor): string[] {
     const pending: string[] = [];
     if (!doc.phone) pending.push("Phone");
+    if (!doc.telegram_userid) pending.push("Telegram ID");
     if (!doc.specialization) pending.push("Specialization");
     if (!doc.registration_no) pending.push("Reg. No");
     if (!doc.education) pending.push("Education");
@@ -181,7 +183,7 @@ export default function AdminDoctorsPage() {
     const [editForm, setEditForm] = useState({
         doctor_name: "", phone: "", whatsapp_number: "", specialization: "",
         gst_number: "", pan_number: "", address: "", registration_no: "", education: "",
-        chat_id: "", num_clinics: "0", active_from: "", active_to: "",
+        chat_id: "", telegram_userid: "", num_clinics: "0", active_from: "", active_to: "",
     });
     const [editError, setEditError] = useState("");
     const [editSubmitting, setEditSubmitting] = useState(false);
@@ -303,6 +305,7 @@ export default function AdminDoctorsPage() {
             registration_no: doc.registration_no || "",
             education: doc.education || "",
             chat_id: doc.chat_id || "",
+            telegram_userid: doc.telegram_userid || "",
             num_clinics: String(doc.num_clinics ?? 0),
             active_from: toDateInput(doc.active_from),
             active_to: toDateInput(doc.active_to),
@@ -381,6 +384,7 @@ export default function AdminDoctorsPage() {
                         document_url: docUrl || null,
                         specialization: formData.specialization || null,
                         chat_id: formData.chat_id || null,
+                        telegram_userid: formData.telegram_userid || null,
                         profile_pic_url: profilePicUrl || null,
                         active_from: formData.active_from || null,
                         active_to: formData.active_to || null,
@@ -488,17 +492,17 @@ export default function AdminDoctorsPage() {
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
-                                            {(() => {
-                                                const effectiveStatus = getEffectiveStatus(doc);
-                                                return (
-                                                    <>
-                                                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
-                                                        <span className={`text-xs font-semibold ${effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
-                                                            {effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
-                                                        </span>
-                                                    </>
-                                                );
-                                            })()}
+                                                    {(() => {
+                                                        const effectiveStatus = getEffectiveStatus(doc);
+                                                        return (
+                                                            <>
+                                                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
+                                                                <span className={`text-xs font-semibold ${effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
+                                                                    {effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
+                                                                </span>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
                                             <td className="text-gray-500">{doc.phone || "—"}</td>
@@ -612,8 +616,14 @@ export default function AdminDoctorsPage() {
                                             )}
                                             {viewDoc.chat_id && (
                                                 <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
-                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Telegram ID</p>
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Telegram Chat ID</p>
                                                     <p className="text-sm font-medium text-gray-800">{viewDoc.chat_id}</p>
+                                                </div>
+                                            )}
+                                            {viewDoc.telegram_userid && (
+                                                <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Telegram User ID</p>
+                                                    <p className="text-sm font-medium text-gray-800">{viewDoc.telegram_userid}</p>
                                                 </div>
                                             )}
                                             {viewDoc.active_from && (
@@ -822,6 +832,10 @@ export default function AdminDoctorsPage() {
                                                 <input type="text" value={editForm.chat_id} onChange={(e) => setEditForm({ ...editForm, chat_id: e.target.value })} className="input-field" placeholder="e.g. 123456789" />
                                             </div>
                                             <div className="space-y-1">
+                                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Bot size={14} className="text-indigo-500" /> Telegram User ID</label>
+                                                <input type="text" value={editForm.telegram_userid} onChange={(e) => setEditForm({ ...editForm, telegram_userid: e.target.value })} className="input-field" placeholder="e.g. @doctor_smith" />
+                                            </div>
+                                            <div className="space-y-1">
                                                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Building2 size={14} className="text-indigo-500" /> No. of Clinics</label>
                                                 <input type="number" min="0" value={editForm.num_clinics} onChange={(e) => setEditForm({ ...editForm, num_clinics: e.target.value })} className="input-field" placeholder="0" />
                                             </div>
@@ -935,6 +949,10 @@ export default function AdminDoctorsPage() {
                                                     <div className="space-y-1">
                                                         <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Bot size={14} className="text-indigo-500" /> Telegram Chat ID</label>
                                                         <input type="text" name="chat_id" value={formData.chat_id} onChange={handleInputChange} className="input-field" placeholder="e.g. 123456789" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Bot size={14} className="text-indigo-500" /> Telegram User ID</label>
+                                                        <input type="text" name="telegram_userid" value={formData.telegram_userid || ""} onChange={handleInputChange} className="input-field" placeholder="e.g. @doctor_smith" />
                                                     </div>
                                                     <div className="space-y-1">
                                                         <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Building2 size={14} className="text-indigo-500" /> No. of Clinics</label>

@@ -102,6 +102,7 @@ export async function POST(req: Request) {
                         education: specific_details?.education || null,
                         document_url: specific_details?.document_url || null,
                         specialization: specific_details?.specialization || null,
+                        telegram_userid: specific_details?.telegram_userid || null,
                         profile_pic_url: specific_details?.profile_pic_url || null,
                         active_from: specific_details?.active_from ? new Date(specific_details.active_from) : null,
                         active_to: specific_details?.active_to ? new Date(specific_details.active_to) : null,
