@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
+import { sendExpoPushNotification } from "@/lib/expoPush";
 
 type TargetMode = "TOMORROW" | "TODAY" | "CUSTOM";
 
@@ -187,6 +188,35 @@ function emitAnnouncementEvents(params: {
             created_at: params.createdAt,
         });
     });
+
+    // Send Expo Push Notifications in the background
+    (async () => {
+        try {
+            const doc = await prisma.doctors.findUnique({
+                where: { doctor_id: params.doctorId },
+                select: { doctor_name: true }
+            });
+            const patients = await prisma.patients.findMany({
+                where: { patient_id: { in: params.recipientIds } },
+                select: { push_token: true }
+            });
+            const tokens = patients.map(p => p.push_token).filter((t): t is string => Boolean(t));
+            if (tokens.length > 0) {
+                // Chunk to 100 recipients max per request (Expo API limits)
+                for (let i = 0; i < tokens.length; i += 100) {
+                    const chunk = tokens.slice(i, i + 100);
+                    await sendExpoPushNotification({
+                        to: chunk,
+                        title: `Announcement from Dr. ${doc?.doctor_name || 'Doctor'}`,
+                        body: params.message.length > 100 ? params.message.substring(0, 97) + '...' : params.message,
+                        sound: 'default'
+                    });
+                }
+            }
+        } catch (err) {
+            console.error("Background announcement push failed:", err);
+        }
+    })();
 }
 
 export async function GET(req: Request) {

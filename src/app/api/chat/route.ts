@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
+import { sendExpoPushNotification } from "@/lib/expoPush";
 
 // GET /api/chat?patient_id=...&doctor_id=...
 export async function GET(request: NextRequest) {
@@ -153,6 +154,40 @@ export async function POST(request: NextRequest) {
                 created_at: message.created_at,
             });
         }
+
+        // Send Expo Push Notification in the background
+        (async () => {
+            try {
+                let pushTokens: string[] = [];
+                let senderName = "Someone";
+                if (sender === "DOCTOR") {
+                    const [patient, doc] = await Promise.all([
+                        prisma.patients.findUnique({ where: { patient_id: patientIdNum }, select: { push_token: true } }),
+                        prisma.doctors.findUnique({ where: { doctor_id: doctorIdNum }, select: { doctor_name: true } })
+                    ]);
+                    if (patient?.push_token) pushTokens.push(patient.push_token);
+                    if (doc?.doctor_name) senderName = `Dr. ${doc.doctor_name}`;
+                } else {
+                    const [doc, patient] = await Promise.all([
+                        prisma.doctors.findUnique({ where: { doctor_id: doctorIdNum }, select: { push_token: true } }),
+                        prisma.patients.findUnique({ where: { patient_id: patientIdNum }, select: { full_name: true } })
+                    ]);
+                    if (doc?.push_token) pushTokens.push(doc.push_token);
+                    if (patient?.full_name) senderName = patient.full_name;
+                }
+
+                if (pushTokens.length > 0) {
+                    await sendExpoPushNotification({
+                        to: pushTokens,
+                        title: `New message from ${senderName}`,
+                        body: content.length > 100 ? content.substring(0, 97) + '...' : content,
+                        sound: 'default'
+                    });
+                }
+            } catch (err) {
+                console.error("Background push notification failed:", err);
+            }
+        })();
 
         return NextResponse.json({ message }, { status: 201 });
     } catch (error) {

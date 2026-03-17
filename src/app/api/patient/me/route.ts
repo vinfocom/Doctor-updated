@@ -74,12 +74,13 @@ export async function PATCH(req: Request) {
         const patientId = session.patientId ?? session.userId;
 
         const body = await req.json();
-        const { full_name, phone, age, gender } = body;
+        const { full_name, phone, age, gender, push_token } = body;
 
-        const updateData: Record<string, string | number> = {};
+        const updateData: Record<string, string | number | null> = {};
         if (full_name !== undefined) updateData.full_name = String(full_name).trim();
         if (phone !== undefined) updateData.phone = String(phone).trim();
         if (gender !== undefined) updateData.gender = String(gender).trim();
+        if (push_token !== undefined) updateData.push_token = push_token ? String(push_token).trim() : null;
         if (age !== undefined && age !== null && age !== '') {
             const ageNum = parseInt(String(age), 10);
             if (!isNaN(ageNum) && ageNum > 0 && ageNum < 150) {

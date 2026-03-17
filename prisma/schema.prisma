@@ -82,6 +82,7 @@ model doctors {
   education              String?                   @db.VarChar(500)
   document_url           String?                   @db.VarChar(500)
   profile_pic_url        String?                   @db.VarChar(500)
+  push_token             String?                   @db.VarChar(255)
   active_from            DateTime?                 @db.Date
   active_to              DateTime?                 @db.Date
   num_clinics            Int?                      @default(0)
@@ -146,6 +147,7 @@ model patients {
   age                     Int?
   gender                  String?                            @db.VarChar(20)
   password                String?                            @db.VarChar(255)
+  push_token              String?                            @db.VarChar(255)
   announcement_recipients announcement_campaign_recipients[]
   appointments            appointment[]
   chat_messages           chat_messages[]

@@ -44,6 +44,25 @@ export async function GET(req: Request) {
             }
         }
 
+        // For clinic staff, filter to their assigned clinic
+        if (user.role === 'CLINIC_STAFF') {
+            const staff = await prisma.clinic_staff.findUnique({
+                where: { user_id: user.userId },
+                include: { clinics: { include: { schedules: { orderBy: { day_of_week: 'asc' } } } }, doctors: { select: { doctor_id: true, doctor_name: true, profile_pic_url: true, num_clinics: true, specialization: true, status: true } } }
+            });
+
+            if (staff && staff.clinics) {
+                // Attach the doctor info directly to the clinic object for consistent mapping on frontend
+                const assignedClinic = {
+                    ...staff.clinics,
+                    doctor: staff.doctors
+                };
+                return NextResponse.json({ clinics: [assignedClinic], doctors: staff.doctors ? [staff.doctors] : [] });
+            } else {
+                return NextResponse.json({ clinics: [], doctors: [] });
+            }
+        }
+
         // For admins / super_admins — return all clinics with doctor info
         const clinics = await prisma.clinics.findMany({
             include: {
