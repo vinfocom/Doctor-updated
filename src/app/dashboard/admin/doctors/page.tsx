@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PremiumButton } from "@/components/ui/PremiumButton";
-import { Shield, UserPlus, X, Pencil, Trash2, AlertTriangle, UploadCloud, FileText, CheckCircle2, Plus, CircleMinus, Power, Smartphone, User, Bot, Building2, Stethoscope, GraduationCap, MapPin, BarChart3, Eye, Phone, Hash, FileDigit, ExternalLink } from "lucide-react";
+import { Shield, UserPlus, X, Pencil, Trash2, AlertTriangle, UploadCloud, FileText, CheckCircle2, Plus, CircleMinus, Power, Smartphone, User, Bot, Building2, Stethoscope, GraduationCap, MapPin, BarChart3, Eye, EyeOff, Phone, Hash, FileDigit, ExternalLink } from "lucide-react";
 
 /* ───────────────── Types ───────────────── */
 interface WhatsAppNum { id?: number; whatsapp_number: string }
@@ -190,6 +190,8 @@ export default function AdminDoctorsPage() {
     const [editError, setEditError] = useState("");
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editWaNums, setEditWaNums] = useState<string[]>([""]);
+    const [showCreatePassword, setShowCreatePassword] = useState(false);
+    const [showEditPassword, setShowEditPassword] = useState(false);
 
     // ── Edit file uploads
     const editFileRef = useRef<HTMLInputElement>(null);
@@ -839,7 +841,23 @@ export default function AdminDoctorsPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-sm font-medium text-gray-700">Password <span className="text-gray-400 text-xs font-normal">(Leave blank to keep unchanged)</span></label>
-                                                <input type="text" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} className="input-field" placeholder="New Password" />
+                                                <div className="relative">
+                                                    <input
+                                                        type={showEditPassword ? "text" : "password"}
+                                                        value={editForm.password}
+                                                        onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                                                        className="input-field pr-10"
+                                                        placeholder="New Password"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowEditPassword((v) => !v)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors"
+                                                        aria-label={showEditPassword ? "Hide password" : "Show password"}
+                                                    >
+                                                        {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-sm font-medium text-gray-700">Appointment Phone Number</label>
@@ -956,7 +974,25 @@ export default function AdminDoctorsPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-sm font-medium text-gray-700">Password <span className="text-red-400">*</span></label>
-                                                <input type="password" name="password" value={formData.password} onChange={handleInputChange} required className="input-field" placeholder="••••••••" />
+                                                <div className="relative">
+                                                    <input
+                                                        type={showCreatePassword ? "text" : "password"}
+                                                        name="password"
+                                                        value={formData.password}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        className="input-field pr-10"
+                                                        placeholder="••••••••"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowCreatePassword((v) => !v)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors"
+                                                        aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                                                    >
+                                                        {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    </button>
+                                                </div>
                                             </div>
                                             {formData.role === "DOCTOR" && (
                                                 <>
