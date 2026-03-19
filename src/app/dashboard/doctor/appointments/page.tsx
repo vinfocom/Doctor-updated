@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Check, UserX, CalendarSync, Trash2, X, Filter, RotateCcw, Stethoscope, User } from "lucide-react";
+import { Check, UserX, CalendarSync, Trash2, X, Filter, RotateCcw, Stethoscope, User, Download } from "lucide-react";
+import AppointmentExportModal from "@/components/AppointmentExportModal";
 
 interface Appointment {
     appointment_id: number;
@@ -129,6 +130,7 @@ export default function DoctorAppointmentsPage() {
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [customFrom, setCustomFrom] = useState("");
     const [customTo, setCustomTo] = useState("");
+    const [isExportOpen, setIsExportOpen] = useState(false);
 
     const [userRole, setUserRole] = useState<string>("DOCTOR");
     const [staffRole, setStaffRole] = useState<string>("");
@@ -211,21 +213,34 @@ export default function DoctorAppointmentsPage() {
                     </p>
                 </motion.div>
                 {/* Only DOCTOR or HAVE_ACCESS staff can add appointments */}
-                {(userRole === "DOCTOR" || (userRole === "CLINIC_STAFF" && staffRole === "HAVE_ACCESS")) && (
+                <div className="flex items-center gap-3">
                     <motion.button
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => setIsModalOpen(true)}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-lg shadow-indigo-200 font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                        onClick={() => setIsExportOpen(true)}
+                        className="px-3 py-2 border border-gray-200 text-gray-700 rounded-lg shadow-sm font-medium flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        aria-label="Download"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                        </svg>
-                        Add Appointment
+                        <Download size={16} />
                     </motion.button>
-                )}
+                    {(userRole === "DOCTOR" || (userRole === "CLINIC_STAFF" && staffRole === "HAVE_ACCESS")) && (
+                        <motion.button
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setIsModalOpen(true)}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-lg shadow-indigo-200 font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                            Add Appointment
+                        </motion.button>
+                    )}
+                </div>
             </div>
 
             <motion.div
@@ -323,6 +338,7 @@ export default function DoctorAppointmentsPage() {
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={() => { fetchData(); }}
             />
+            <AppointmentExportModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} />
             <AppointmentModal
                 isOpen={Boolean(rescheduleAppointment)}
                 onClose={() => setRescheduleAppointment(null)}

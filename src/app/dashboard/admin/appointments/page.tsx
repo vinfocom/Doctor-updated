@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { PremiumTable } from "@/components/ui/PremiumTable";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Loader2, RefreshCcw, Search, Filter } from "lucide-react";
+import { Loader2, RefreshCcw, Search, Filter, Download } from "lucide-react";
+import AppointmentExportModal from "@/components/AppointmentExportModal";
 
 interface Appointment {
     appointment_id: number;
@@ -57,6 +58,7 @@ export default function AppointmentsPage() {
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [customFrom, setCustomFrom] = useState("");
     const [customTo, setCustomTo] = useState("");
+    const [isExportOpen, setIsExportOpen] = useState(false);
 
     useEffect(() => {
         fetchAppointments();
@@ -229,6 +231,9 @@ export default function AppointmentsPage() {
                     <PremiumButton variant="secondary" onClick={fetchAppointments} icon={RefreshCcw}>
                         Refresh
                     </PremiumButton>
+                    <PremiumButton variant="secondary" onClick={() => setIsExportOpen(true)} icon={Download}>
+                        <span className="sr-only">Download</span>
+                    </PremiumButton>
                 </div>
             </div>
 
@@ -340,6 +345,8 @@ export default function AppointmentsPage() {
                     </>
                 )}
             </GlassCard>
+
+            <AppointmentExportModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} />
         </div>
     );
 }
