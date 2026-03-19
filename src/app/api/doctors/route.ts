@@ -76,8 +76,34 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
         }
 
-        // Delete in FK-safe order: tokens → doctor → user (so email is reusable)
+        // Delete in FK-safe order to avoid constraint failures
         await prisma.$transaction(async (tx) => {
+            // 0. Clean up child records that reference doctor
+            await tx.appointment_notification_log.deleteMany({
+                where: { appointment: { doctor_id: doctor.doctor_id } },
+            });
+            await tx.appointment.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.chat_messages.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.announcement_campaign_recipients.deleteMany({
+                where: { campaign: { doctor_id: doctor.doctor_id } },
+            });
+            await tx.announcement_campaigns.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.doctor_remainder_queue.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.doctor_leaves.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.doctor_clinic_schedule.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.clinic_staff.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            await tx.doctor_whatsapp_numbers.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+
+            // 1. Null out optional references
+            await tx.clinics.updateMany({
+                where: { doctor_id: doctor.doctor_id },
+                data: { doctor_id: null },
+            });
+            await tx.patients.updateMany({
+                where: { doctor_id: doctor.doctor_id },
+                data: { doctor_id: null },
+            });
+
             // 1. Delete user_tokens for this user (FK on users)
             if (doctor.user_id) {
                 await tx.user_tokens.deleteMany({ where: { user_id: doctor.user_id } });

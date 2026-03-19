@@ -257,7 +257,13 @@ export default function AdminDoctorsPage() {
     /* ────── Delete ────── */
     const handleDelete = async (doctorId: number) => {
         const res = await fetch(`/api/doctors?id=${doctorId}`, { method: "DELETE" });
-        if (res.ok) { setDoctors(doctors.filter((d) => d.doctor_id !== doctorId)); setDeleteConfirmId(null); }
+        if (res.ok) {
+            setDoctors(doctors.filter((d) => d.doctor_id !== doctorId));
+            setDeleteConfirmId(null);
+        } else {
+            const data = await res.json().catch(() => ({}));
+            alert(data.error || "Failed to delete doctor");
+        }
     };
 
     /* ────── Toggle Active/Inactive ────── */
