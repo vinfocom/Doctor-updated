@@ -149,12 +149,10 @@ export default function AppointmentsPage() {
                 }
                 return "N/A";
             }
-            return t.toLocaleTimeString("en-IN", {
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true,
-                timeZone: "Asia/Kolkata",
-            });
+            const h = t.getUTCHours();
+            const m = t.getUTCMinutes();
+            const ampm = h >= 12 ? "PM" : "AM";
+            return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
         } catch {
             return "N/A";
         }

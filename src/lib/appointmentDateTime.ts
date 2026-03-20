@@ -9,7 +9,8 @@ export const parseISTDate = (dateStr: string): Date => {
 
 export const parseISTTimeToUTCDate = (timeStr: string): Date => {
     const [hours, minutes] = String(timeStr).slice(0, 5).split(":").map(Number);
-    const utcMillis = Date.UTC(1970, 0, 1, hours || 0, minutes || 0) - IST_OFFSET_MINUTES * 60 * 1000;
+    // IST-only storage: keep HH:MM as-is without timezone shifting.
+    const utcMillis = Date.UTC(1970, 0, 1, hours || 0, minutes || 0);
     return new Date(utcMillis);
 };
 
@@ -17,13 +18,10 @@ export const formatUTCDateToISTTime = (value: Date | string | null | undefined):
     if (!value) return "";
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) return "";
-
-    return new Intl.DateTimeFormat("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Kolkata",
-    }).format(date);
+    // IST-only storage: read raw UTC hours/minutes (no timezone shift).
+    const hh = pad(date.getUTCHours());
+    const mm = pad(date.getUTCMinutes());
+    return `${hh}:${mm}`;
 };
 
 export const formatDateToISTYMD = (value: Date | string | null | undefined): string => {

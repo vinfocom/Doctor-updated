@@ -448,6 +448,12 @@ export async function PATCH(request: Request) {
         return NextResponse.json(jsonSafe(updatedAppointment));
     } catch (error) {
         console.error('Error updating appointment:', error);
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return NextResponse.json(
+                { error: 'Slot already booked' },
+                { status: 409 }
+            );
+        }
         return NextResponse.json(
             { error: 'Failed to update appointment' },
             { status: 500 }
