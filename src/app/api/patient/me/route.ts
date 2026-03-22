@@ -43,6 +43,7 @@ export async function GET(req: Request) {
                         doctor_name: true,
                         phone: true,
                         specialization: true,
+                        profile_pic_url: true,
                     },
                 },
             },
