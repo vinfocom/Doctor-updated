@@ -17,7 +17,7 @@ export async function GET(req: Request) {
             where: { patient_id: patientId },
             include: {
                 doctor: {
-                    select: { doctor_id: true, doctor_name: true, specialization: true, phone: true },
+                    select: { doctor_id: true, doctor_name: true, specialization: true, phone: true, profile_pic_url: true },
                 },
                 clinic: {
                     select: { clinic_id: true, clinic_name: true, location: true, phone: true },
