@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MedBook — Doctor Appointment System",
+  title: "Dapto",
   description: "Book appointments with top doctors. Manage your health effortlessly with our modern appointment system.",
 };
 
