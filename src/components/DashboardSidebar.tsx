@@ -1,6 +1,7 @@
 
 "use client";
 import React, { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
@@ -26,6 +27,9 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
+    const homeHref = role === "SUPER_ADMIN" || role === "ADMIN"
+        ? "/dashboard/admin"
+        : "/dashboard/doctor";
 
     const handleLogout = async () => {
         await fetch("/api/auth/logout", { method: "POST" });
@@ -71,10 +75,18 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
     const SidebarContent = () => (
         <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="mb-10 px-2 flex justify-between items-center">
-                <Link href="/" className="block">
-                    <h2 className="text-2xl font-bold gradient-text tracking-tight">Dapto</h2>
-                    <p className="text-[11px] text-gray-400 mt-0.5 tracking-wider uppercase">Appointment System</p>
+            <div className="mb-7 -mt-4 px-2 flex justify-between items-center">
+                <Link href={homeHref} className="block" onClick={() => setIsOpen(false)}>
+                    <div className="flex items-center">
+                        <Image
+                            src="/logo.png"
+                            alt="Dapto"
+                            width={150}
+                            height={60}
+                            priority
+                            className="h-auto w-[150px] object-contain"
+                        />
+                    </div>
                 </Link>
                 {/* Close button for mobile */}
                 <button

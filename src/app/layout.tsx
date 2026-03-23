@@ -7,6 +7,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Dapto",
   description: "Book appointments with top doctors. Manage your health effortlessly with our modern appointment system.",
+  icons: {
+    icon: "/icon.png?v=4",
+    shortcut: "/icon.png?v=4",
+    apple: "/icon.png?v=4",
+  },
 };
 
 export default function RootLayout({
