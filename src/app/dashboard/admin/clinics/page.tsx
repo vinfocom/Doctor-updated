@@ -249,7 +249,7 @@ export default function AdminClinicsPage() {
     const handleGenerateBarcode = async (doctor_id: number | null | undefined, clinic_id: number) => {
         try {
             const docId = doctor_id || "";
-            const url = `https://msgbot.duckdns.org/qr/checkin?doctor_id=${docId}&clinic_id=${clinic_id}`;
+            const url = `https://msgbot.duckdns.org/qr/generate/download?doctor_id=${docId}&clinic_id=${clinic_id}`;
             await fetch(`/api/clinics/${clinic_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },

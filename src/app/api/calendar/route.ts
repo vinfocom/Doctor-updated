@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/jwt";
 import { cookies } from "next/headers";
 import { formatDateToISTYMD, formatISTTimeLabel, getISTDateParts } from "@/lib/appointmentDateTime";
+import { attachBookingIds } from "@/lib/bookingId";
 
 export async function GET(req: Request) {
     try {
@@ -44,6 +45,8 @@ export async function GET(req: Request) {
             },
             select: {
                 appointment_id: true,
+                doctor_id: true,
+                clinic_id: true,
                 appointment_date: true,
                 status: true,
                 cancelled_by: true,
@@ -60,6 +63,8 @@ export async function GET(req: Request) {
             },
         });
 
+        const appointmentsWithBookingIds = await attachBookingIds(appointments);
+
         // Doctor leaves for the month
         const leaves = await prisma.doctor_leaves.findMany({
             where: {
@@ -74,7 +79,7 @@ export async function GET(req: Request) {
             date: string; total: number; arrived: number; upcoming: number; appointments: any[];
         }> = {};
 
-        for (const apt of appointments) {
+        for (const apt of appointmentsWithBookingIds) {
             if (!apt.appointment_date) continue;
             const dateKey = formatDateToISTYMD(apt.appointment_date);
             if (!dayMap[dateKey]) {
@@ -97,7 +102,7 @@ export async function GET(req: Request) {
                 start_time_display: startDisplay,
                 patient_name: apt.patient?.full_name || "Unknown",
                 patient_phone: apt.patient?.phone || "",
-                booking_id: apt.patient?.booking_id,
+                booking_id: apt.booking_id,
                 clinic_name: apt.clinic?.clinic_name || "",
             });
         }

@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { Prisma } from '@/generated/prisma/client';
 import { parseISTDate, parseISTTimeToUTCDate } from '@/lib/appointmentDateTime';
+import { attachBookingIds, computeBookingIdForAppointment } from '@/lib/bookingId';
 
 const VALID_APPOINTMENT_STATUSES = new Set([
     'BOOKED',
@@ -122,7 +123,9 @@ export async function GET(request: Request) {
         });
 
 
-        return NextResponse.json(jsonSafe(appointments));
+        const appointmentsWithBookingIds = await attachBookingIds(appointments);
+
+        return NextResponse.json(jsonSafe(appointmentsWithBookingIds));
     } catch (error) {
         console.error('Error fetching appointments:', error);
         return NextResponse.json(
@@ -148,6 +151,7 @@ export async function POST(request: Request) {
         // Resolve IDs from session
         const cookieStore = await cookies();
         let token = cookieStore.get("token")?.value;
+        let sessionUser: ReturnType<typeof verifyToken> | null = null;
 
         if (!token) {
             const authHeader = request.headers.get("Authorization");
@@ -157,6 +161,7 @@ export async function POST(request: Request) {
         }
         if (token) {
             const user = verifyToken(token);
+            sessionUser = user;
             if (user) {
                 if (user.role === 'DOCTOR') {
                     // Fetch doctor details to get admin_id and doctor_id
@@ -216,6 +221,12 @@ export async function POST(request: Request) {
         const dateObj = parseISTDate(appointment_date);
         const startTimeObj = parseISTTimeToUTCDate(start_time);
         const endTimeObj = parseISTTimeToUTCDate(end_time);
+        const appointmentBookingId = await computeBookingIdForAppointment({
+            doctor_id: Number(doctor_id),
+            clinic_id: Number(clinic_id),
+            appointment_date: dateObj,
+            start_time: startTimeObj,
+        });
 
         const existingAppointmentsCount = await prisma.appointment.count({
             where: {
@@ -294,6 +305,45 @@ export async function POST(request: Request) {
             });
         }
 
+        const existingSameDay = await prisma.appointment.findFirst({
+            where: {
+                patient_id: patient.patient_id,
+                doctor_id: Number(doctor_id),
+                clinic_id: Number(clinic_id),
+                appointment_date: dateObj,
+            },
+            orderBy: { appointment_id: "desc" },
+        });
+
+        if (existingSameDay) {
+            if (existingSameDay.status === "COMPLETED") {
+                return NextResponse.json(
+                    { error: "Appointment already completed for this date. Please choose another date." },
+                    { status: 409 }
+                );
+            }
+
+            const rescheduled = await prisma.appointment.update({
+                where: { appointment_id: existingSameDay.appointment_id },
+                data: {
+                    start_time: startTimeObj,
+                    end_time: endTimeObj,
+                    status: "BOOKED",
+                    rescheduled_by: String(sessionUser?.role || "DOCTOR"),
+                    ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
+                },
+            });
+
+            return NextResponse.json({
+                ...rescheduled,
+                booking_for,
+                patient_reused: Boolean(
+                    existingPatientsOnPhone.some((p) => p.patient_id === patient.patient_id)
+                ),
+                rescheduled_existing: true,
+            });
+        }
+
         const appointment = await prisma.appointment.create({
             data: {
                 patient_id: patient.patient_id,
@@ -303,7 +353,8 @@ export async function POST(request: Request) {
                 status: 'BOOKED',
                 appointment_date: dateObj,
                 start_time: startTimeObj,
-                end_time: endTimeObj
+                end_time: endTimeObj,
+                ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
             }
         });
 
@@ -313,6 +364,7 @@ export async function POST(request: Request) {
             patient_reused: Boolean(
                 existingPatientsOnPhone.some((p) => p.patient_id === patient.patient_id)
             ),
+            rescheduled_existing: false,
         });
 
     } catch (error: unknown) {
@@ -438,6 +490,25 @@ export async function PATCH(request: Request) {
         if (rescheduled_by) updateData.rescheduled_by = rescheduled_by;
         if (hasRescheduleFields && !status) {
             updateData.status = "BOOKED";
+        }
+
+        if (hasRescheduleFields) {
+            const existing = await prisma.appointment.findUnique({
+                where: { appointment_id: Number(appointmentId) },
+                select: { doctor_id: true, clinic_id: true, appointment_date: true, start_time: true },
+            });
+
+            const nextDate = appointment_date ? parseISTDate(appointment_date) : existing?.appointment_date || null;
+            const nextStart = start_time ? parseISTTimeToUTCDate(start_time) : existing?.start_time || null;
+            const bookingId = await computeBookingIdForAppointment({
+                doctor_id: existing?.doctor_id ?? null,
+                clinic_id: existing?.clinic_id ?? null,
+                appointment_date: nextDate,
+                start_time: nextStart,
+            });
+            if (bookingId != null) {
+                updateData.booking_id = bookingId;
+            }
         }
 
         const updatedAppointment = await prisma.appointment.update({

@@ -361,7 +361,7 @@ export default function ClinicsPage() {
 
     const handleGenerateBarcode = async (clinic: Clinic) => {
         try {
-            const url = `https://msgbot.duckdns.org/qr/checkin?doctor_id=${clinic.doctor_id}&clinic_id=${clinic.clinic_id}`;
+            const url = `https://msgbot.duckdns.org/qr/generate/download?doctor_id=${clinic.doctor_id}&clinic_id=${clinic.clinic_id}`;
             await fetch(`/api/clinics/${clinic.clinic_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },

@@ -6,6 +6,7 @@ import { verifyToken } from "@/lib/jwt";
 import { cookies } from "next/headers";
 import { parseISTDate } from "@/lib/appointmentDateTime";
 import { Prisma } from "@/generated/prisma/client";
+import { attachBookingIds } from "@/lib/bookingId";
 
 export const runtime = "nodejs";
 
@@ -269,9 +270,11 @@ export async function GET(request: Request) {
             orderBy: [{ appointment_date: "asc" }, { start_time: "asc" }],
         });
 
-        const rows = appointments.map((apt) => ({
+        const appointmentsWithBookingIds = await attachBookingIds(appointments);
+
+        const rows = appointmentsWithBookingIds.map((apt) => ({
             name: apt.patient?.full_name || "Unknown",
-            appointmentNo: String(apt.patient?.booking_id ?? apt.appointment_id),
+            appointmentNo: String(apt.booking_id ?? apt.appointment_id),
             clinic: apt.clinic?.clinic_name || "N/A",
             date: formatISTDate(apt.appointment_date),
             status: STATUS_LABELS[apt.status || ""] || apt.status || "N/A",

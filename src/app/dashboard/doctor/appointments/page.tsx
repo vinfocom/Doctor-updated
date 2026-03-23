@@ -7,6 +7,7 @@ import AppointmentExportModal from "@/components/AppointmentExportModal";
 
 interface Appointment {
     appointment_id: number;
+    booking_id?: number | null;
     created_at: string;
     status: string;
     cancelled_by?: string | null;
@@ -434,7 +435,7 @@ export default function DoctorAppointmentsPage() {
                                             </div>
                                         </td>
                                         <td className="text-gray-500 font-medium">
-                                            {apt.patient?.booking_id ?? apt.appointment_id}
+                                            {apt.booking_id ?? apt.appointment_id}
                                         </td>
                                         <td className="text-gray-500">{apt.patient?.phone || "N/A"}</td>
                                         <td className="text-gray-500">

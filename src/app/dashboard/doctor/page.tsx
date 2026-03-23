@@ -16,6 +16,7 @@ interface DoctorStats {
 
 interface Appointment {
     appointment_id: number;
+    booking_id?: number | null;
     appointment_date: string | null;
     start_time: string | null;
     status: string;
@@ -162,7 +163,7 @@ export default function DoctorDashboard() {
         {
             header: "Appt No.",
             accessorKey: (item: Appointment) => (
-                <span className="text-gray-700 text-sm">{item.patient?.booking_id ?? "—"}</span>
+                <span className="text-gray-700 text-sm">{item.booking_id ?? "—"}</span>
             )
         },
         {
