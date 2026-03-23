@@ -146,7 +146,7 @@ export default function Main() {
         >
           <span className="text-sm font-semibold text-indigo-600 tracking-wider uppercase">Features</span>
           <h2 className="text-3xl md:text-5xl font-bold mt-3 text-gray-900">
-            Why Choose MedBook?
+            Why Choose Dapto?
           </h2>
           <p className="text-gray-500 mt-4 max-w-lg mx-auto">
             Everything you need to manage your health appointments in one place.
@@ -194,7 +194,7 @@ export default function Main() {
               Ready to Get Started?
             </h2>
             <p className="text-gray-500 mb-8 max-w-lg mx-auto">
-              Join thousands of doctors and clinics who trust MedBook for managing appointments.
+              Join thousands of doctors and clinics who trust Dapto for managing appointments.
             </p>
             <Link href="/login">
               <motion.button
@@ -211,7 +211,7 @@ export default function Main() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-gray-200 py-8 text-center text-gray-400 text-sm">
-        <p>© 2026 MedBook. All rights reserved.</p>
+        <p>© 2026 Vinfocom IT Services Pvt. Ltd. All rights reserved.</p>
       </footer>
     </div>
   );

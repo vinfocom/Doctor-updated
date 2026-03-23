@@ -166,8 +166,14 @@ export default function DoctorAppointmentsPage() {
             }
 
             const query = params.toString();
-            const appointmentsUrl = query ? `/api/appointments?${query}` : "/api/appointments";
-            const [meRes, aptRes] = await Promise.all([fetch("/api/auth/me"), fetch(appointmentsUrl)]);
+            const cacheBust = `_ts=${Date.now()}`;
+            const appointmentsUrl = query
+                ? `/api/appointments?${query}&${cacheBust}`
+                : `/api/appointments?${cacheBust}`;
+            const [meRes, aptRes] = await Promise.all([
+                fetch("/api/auth/me", { cache: "no-store" }),
+                fetch(appointmentsUrl, { cache: "no-store" }),
+            ]);
             if (!meRes.ok) { router.push("/login"); return; }
             const meData = await meRes.json();
             // Allow both DOCTOR and CLINIC_STAFF
@@ -180,6 +186,27 @@ export default function DoctorAppointmentsPage() {
     }, [router, datePreset, customFrom, customTo, statusFilter]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            if (document.visibilityState !== "visible") return;
+            fetchData();
+        }, 15000);
+
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState !== "visible") return;
+            fetchData();
+        };
+
+        window.addEventListener("focus", handleVisibilityOrFocus);
+        document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener("focus", handleVisibilityOrFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+        };
+    }, [fetchData]);
 
     const handleStatusUpdate = async (appointmentId: number, status: string) => {
         const body: Record<string, unknown> = { appointmentId, status };

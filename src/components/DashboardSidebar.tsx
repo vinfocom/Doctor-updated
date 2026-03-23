@@ -73,7 +73,7 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
             {/* Logo */}
             <div className="mb-10 px-2 flex justify-between items-center">
                 <Link href="/" className="block">
-                    <h2 className="text-2xl font-bold gradient-text tracking-tight">MedBook</h2>
+                    <h2 className="text-2xl font-bold gradient-text tracking-tight">Dapto</h2>
                     <p className="text-[11px] text-gray-400 mt-0.5 tracking-wider uppercase">Appointment System</p>
                 </Link>
                 {/* Close button for mobile */}
