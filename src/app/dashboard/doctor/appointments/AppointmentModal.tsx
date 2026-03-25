@@ -31,6 +31,7 @@ type BookingFor = 'SELF' | 'OTHER';
 interface MatchedPatient {
     patient_id: number;
     full_name: string | null;
+    profile_type?: BookingFor | null;
 }
 
 const to12HourLabel = (time: string): string => {
@@ -62,6 +63,7 @@ export default function AppointmentModal({
     const [availableSlots, setAvailableSlots] = useState<string[]>([]);
     const [matchedPatients, setMatchedPatients] = useState<MatchedPatient[]>([]);
     const [lookupLoading, setLookupLoading] = useState(false);
+    const [lockedPatientProfile, setLockedPatientProfile] = useState<MatchedPatient | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -70,6 +72,7 @@ export default function AppointmentModal({
             setAvailableSlots([]);
             setSlotDuration(30);
             setMatchedPatients([]);
+            setLockedPatientProfile(null);
             setLookupLoading(false);
             setFormData({
                 patient_phone: initialValues?.patient_phone || '',
@@ -84,6 +87,7 @@ export default function AppointmentModal({
             setAvailableSlots([]);
             setError('');
             setMatchedPatients([]);
+            setLockedPatientProfile(null);
             setLookupLoading(false);
         }
     }, [initialValues, isOpen]);
@@ -94,6 +98,7 @@ export default function AppointmentModal({
         const phone = formData.patient_phone.trim();
         if (phone.length < 8) {
             setMatchedPatients([]);
+            setLockedPatientProfile(null);
             setLookupLoading(false);
             return;
         }
@@ -102,20 +107,33 @@ export default function AppointmentModal({
         const timer = window.setTimeout(async () => {
             setLookupLoading(true);
             try {
-                const res = await fetch(`/api/patients/lookup?phone=${encodeURIComponent(phone)}`, {
+                const res = await fetch(`/api/patients/lookup?phone=${encodeURIComponent(phone)}&booking_for=${encodeURIComponent(formData.booking_for)}`, {
                     signal: controller.signal,
                 });
 
                 if (!res.ok) {
                     setMatchedPatients([]);
+                    setLockedPatientProfile(null);
                     return;
                 }
 
                 const data = await res.json();
-                setMatchedPatients(data.patients || []);
+                const nextPatients = data.patients || [];
+                const lockedPatient = data.is_locked ? (data.patient || null) : null;
+                setMatchedPatients(nextPatients);
+                setLockedPatientProfile(lockedPatient);
+                setFormData((prev) => {
+                    if (prev.patient_phone.trim() !== phone || prev.booking_for !== formData.booking_for) return prev;
+                    if (lockedPatient?.full_name) {
+                        return { ...prev, patient_name: lockedPatient.full_name };
+                    }
+                    if (prev.patient_name.trim()) return prev;
+                    return { ...prev, patient_name: '' };
+                });
             } catch (error) {
                 if ((error as Error).name !== 'AbortError') {
                     setMatchedPatients([]);
+                    setLockedPatientProfile(null);
                 }
             } finally {
                 setLookupLoading(false);
@@ -126,7 +144,7 @@ export default function AppointmentModal({
             controller.abort();
             window.clearTimeout(timer);
         };
-    }, [formData.patient_phone, isOpen, mode]);
+    }, [formData.booking_for, formData.patient_phone, isOpen, mode]);
 
 
     const fetchClinics = async () => {
@@ -286,7 +304,11 @@ export default function AppointmentModal({
                                             <button
                                                 key={value}
                                                 type="button"
-                                                onClick={() => setFormData({ ...formData, booking_for: value })}
+                                                onClick={() => setFormData((prev) => ({
+                                                    ...prev,
+                                                    booking_for: value,
+                                                    patient_name: prev.booking_for === value ? prev.patient_name : '',
+                                                }))}
                                                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                                                     formData.booking_for === value
                                                         ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
@@ -308,14 +330,28 @@ export default function AppointmentModal({
                                     type="text"
                                     required={mode === 'create'}
                                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                                    placeholder="Enter full name"
+                                    placeholder={lockedPatientProfile ? `${formData.booking_for === 'SELF' ? 'Self' : 'Other'} patient linked to this phone` : 'Enter full name'}
                                     value={formData.patient_name}
                                     onChange={(e) => setFormData({ ...formData, patient_name: e.target.value })}
-                                    readOnly={mode === 'reschedule'}
+                                    readOnly={mode === 'reschedule' || Boolean(lockedPatientProfile)}
                                 />
-                                {mode === 'create' && matchedPatients.length > 0 && (
+                                {mode === 'create' && lockedPatientProfile?.full_name ? (
+                                    <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
+                                        <p className="text-xs font-medium text-emerald-700">
+                                            Linked {formData.booking_for === 'SELF' ? 'self' : 'other'} profile
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-emerald-800">
+                                            {lockedPatientProfile.full_name}
+                                        </p>
+                                        <p className="mt-2 text-xs text-emerald-700">
+                                            Name is auto-filled from the existing profile for this phone.
+                                        </p>
+                                    </div>
+                                ) : mode === 'create' && matchedPatients.length > 0 && (
                                     <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-3">
-                                        <p className="text-xs font-medium text-amber-700">Existing names on this phone</p>
+                                        <p className="text-xs font-medium text-amber-700">
+                                            Existing {formData.booking_for === 'SELF' ? 'self' : 'other'} profile names on this phone
+                                        </p>
                                         <div className="mt-2 flex flex-wrap gap-2">
                                             {matchedPatients.map((patient) => (
                                                 <button
@@ -324,7 +360,6 @@ export default function AppointmentModal({
                                                     onClick={() => setFormData({
                                                         ...formData,
                                                         patient_name: patient.full_name || '',
-                                                        booking_for: 'SELF',
                                                     })}
                                                     className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                                                 >
@@ -333,7 +368,7 @@ export default function AppointmentModal({
                                             ))}
                                         </div>
                                         <p className="mt-2 text-xs text-amber-700">
-                                            Same name reuses the same patient. Different name books for `Other` on the same phone.
+                                            Existing profile found for this booking type. Selecting it reuses the same patient.
                                         </p>
                                     </div>
                                 )}

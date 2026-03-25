@@ -26,8 +26,11 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url);
         const phone = String(searchParams.get("phone") || "").trim();
+        const bookingFor = String(searchParams.get("booking_for") || "SELF").trim().toUpperCase() === "OTHER"
+            ? "OTHER"
+            : "SELF";
         if (!phone) {
-            return NextResponse.json({ patients: [] });
+            return NextResponse.json({ patients: [], patient: null, is_locked: false });
         }
 
         let adminId: number | undefined;
@@ -81,21 +84,37 @@ export async function GET(req: Request) {
                 patient_id: true,
                 full_name: true,
                 phone: true,
+                profile_type: true,
             },
             orderBy: {
                 patient_id: "desc",
             },
         });
 
-        const uniquePatients = patients
+        const matchingPatients = patients
             .filter((patient) => phonesMatch(patient.phone, phone))
-            .filter((patient, index, items) => {
-            const currentName = (patient.full_name || "").trim().toLowerCase();
-            return items.findIndex((item) => (item.full_name || "").trim().toLowerCase() === currentName) === index;
-            })
-            .map(({ patient_id, full_name }) => ({ patient_id, full_name }));
+            .filter((patient) => patient.profile_type === bookingFor);
 
-        return NextResponse.json({ patients: uniquePatients });
+        const preferredPatient = matchingPatients[0] || null;
+        const uniquePatients = matchingPatients
+            .filter((patient, index, items) => {
+                const currentName = (patient.full_name || "").trim().toLowerCase();
+                return items.findIndex((item) => (item.full_name || "").trim().toLowerCase() === currentName) === index;
+            })
+            .map(({ patient_id, full_name, profile_type }) => ({ patient_id, full_name, profile_type }));
+
+        return NextResponse.json({
+            patients: uniquePatients,
+            patient: preferredPatient
+                ? {
+                    patient_id: preferredPatient.patient_id,
+                    full_name: preferredPatient.full_name,
+                    profile_type: preferredPatient.profile_type,
+                }
+                : null,
+            is_locked: Boolean(preferredPatient?.full_name),
+            booking_for: bookingFor,
+        });
     } catch (error) {
         console.error("Patient lookup error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });

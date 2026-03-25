@@ -4,24 +4,11 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
 
-function attachPatientType<T extends { patient_id: number; phone: string | null }>(patients: T[]) {
-    const firstPatientByPhone = new Map<string, number>();
-
-    for (const patient of [...patients].sort((a, b) => a.patient_id - b.patient_id)) {
-        const phoneKey = String(patient.phone || "").trim();
-        if (!phoneKey || firstPatientByPhone.has(phoneKey)) continue;
-        firstPatientByPhone.set(phoneKey, patient.patient_id);
-    }
-
-    return patients.map((patient) => {
-        const phoneKey = String(patient.phone || "").trim();
-        const firstPatientId = phoneKey ? firstPatientByPhone.get(phoneKey) : undefined;
-
-        return {
-            ...patient,
-            patient_type: firstPatientId && firstPatientId !== patient.patient_id ? "Other" : "Self",
-        };
-    });
+function attachPatientType<T extends { profile_type?: "SELF" | "OTHER" | null }>(patients: T[]) {
+    return patients.map((patient) => ({
+        ...patient,
+        patient_type: patient.profile_type === "OTHER" ? "Other" : "Self",
+    }));
 }
 
 export async function GET(req: Request) {
@@ -61,6 +48,7 @@ export async function GET(req: Request) {
                 doctor_name: p.doctor?.doctor_name || null,
                 appointment_count: p._count.appointments,
                 registered_at: firstApptMap.get(p.patient_id)?.toISOString() || null,
+                profile_type: p.profile_type,
             }));
 
             return NextResponse.json({ patients: attachPatientType(result) });
@@ -180,7 +168,8 @@ export async function POST(req: Request) {
                 phone,
                 telegram_chat_id: telegram_chat_id || null,
                 admin_id,
-                doctor_id
+                doctor_id,
+                profile_type: "SELF",
             }
         });
 

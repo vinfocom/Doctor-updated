@@ -141,6 +141,7 @@ model patients {
   full_name               String?                            @db.VarChar(255)
   admin_id                Int
   doctor_id               Int?
+  profile_type            PatientProfileType                 @default(SELF)
   status                  PatientStatus?
   phone                   String?                            @db.VarChar(255)
   booking_id              Int?
@@ -159,6 +160,7 @@ model patients {
 
   @@index([admin_id], map: "patients_admin_id_fkey")
   @@index([doctor_id], map: "patients_doctor_id_fkey")
+  @@index([admin_id, phone, profile_type], map: "idx_patients_admin_phone_profile_type")
 }
 
 model inbound_turn_queue {
@@ -471,6 +473,11 @@ enum DoctorStatus {
 enum PatientStatus {
   BLOCKED   @map("Blocked")
   UNBLOCKED @map("Unblocked")
+}
+
+enum PatientProfileType {
+  SELF
+  OTHER
 }
 
 enum users_role {

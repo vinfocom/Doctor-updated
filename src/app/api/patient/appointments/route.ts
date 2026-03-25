@@ -6,6 +6,21 @@ import { getSessionFromRequest } from "@/lib/request-auth";
 import { addMinutesToTimeString, getISTDayOfWeek, parseISTDate, parseISTTimeToUTCDate } from "@/lib/appointmentDateTime";
 import { attachBookingIds, computeBookingIdForAppointment } from "@/lib/bookingId";
 
+function normalizePhone(value: string | null | undefined) {
+    return String(value || "").replace(/\D/g, "");
+}
+
+function phonesMatch(left: string | null | undefined, right: string | null | undefined) {
+    const normalizedLeft = normalizePhone(left);
+    const normalizedRight = normalizePhone(right);
+    if (!normalizedLeft || !normalizedRight) return false;
+    if (normalizedLeft === normalizedRight) return true;
+    if (normalizedLeft.length >= 10 && normalizedRight.length >= 10) {
+        return normalizedLeft.slice(-10) === normalizedRight.slice(-10);
+    }
+    return false;
+}
+
 export async function GET(req: Request) {
     try {
         const session = await getSessionFromRequest(req);
@@ -14,8 +29,40 @@ export async function GET(req: Request) {
         }
 
         const patientId = session.patientId ?? session.userId;
-        const appointments = await prisma.appointment.findMany({
+        const patient = await prisma.patients.findUnique({
             where: { patient_id: patientId },
+            select: {
+                patient_id: true,
+                phone: true,
+                full_name: true,
+                admin_id: true,
+            },
+        });
+
+        if (!patient) {
+            return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+        }
+
+        const relatedPatients = patient.phone
+            ? await prisma.patients.findMany({
+                where: { admin_id: patient.admin_id },
+                select: {
+                    patient_id: true,
+                    full_name: true,
+                    phone: true,
+                },
+                orderBy: { patient_id: "asc" },
+            })
+            : [patient];
+
+        const phoneLinkedPatients = relatedPatients.filter((item) => phonesMatch(item.phone, patient.phone));
+        const groupedPatientIds = phoneLinkedPatients.map((item) => item.patient_id);
+        const groupedPatientIdsSet = new Set(groupedPatientIds);
+
+        const appointments = await prisma.appointment.findMany({
+            where: {
+                patient_id: groupedPatientIds.length > 0 ? { in: groupedPatientIds } : patientId,
+            },
             include: {
                 doctor: {
                     select: { doctor_id: true, doctor_name: true, specialization: true, phone: true, profile_pic_url: true },
@@ -24,15 +71,27 @@ export async function GET(req: Request) {
                     select: { clinic_id: true, clinic_name: true, location: true, phone: true },
                 },
                 patient: {
-                    select: { booking_id: true },
+                    select: { patient_id: true, booking_id: true, full_name: true, phone: true, profile_type: true },
                 },
             },
             orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
         });
 
         const appointmentsWithBookingIds = await attachBookingIds(appointments);
+        const enrichedAppointments = appointmentsWithBookingIds
+            .filter((appointment) => appointment.patient_id == null || groupedPatientIdsSet.has(appointment.patient_id))
+            .map((appointment) => {
+                const relationType = appointment.patient?.profile_type === "OTHER" ? "OTHER" : "SELF";
+                return {
+                    ...appointment,
+                    relation_type: relationType,
+                    relation_label: relationType === "SELF"
+                        ? "Self"
+                        : `Other: ${String(appointment.patient?.full_name || "Patient").trim() || "Patient"}`,
+                };
+            });
 
-        const safe = JSON.parse(JSON.stringify(appointmentsWithBookingIds, (_k, v) =>
+        const safe = JSON.parse(JSON.stringify(enrichedAppointments, (_k, v) =>
             typeof v === "bigint" ? v.toString() : v
         ));
         return NextResponse.json({ appointments: safe });
@@ -55,6 +114,7 @@ export async function POST(req: Request) {
         const clinic_id = Number(body?.clinic_id);
         const appointment_date = String(body?.appointment_date || "");
         const start_time = String(body?.start_time || "");
+        const booking_for = String(body?.booking_for || body?.booked_for || "SELF").trim().toUpperCase() === "OTHER" ? "OTHER" : "SELF";
         const patient_name = String(body?.patient_name || "").trim();
 
         if (!doctor_id || !clinic_id || !appointment_date || !start_time) {
@@ -63,7 +123,7 @@ export async function POST(req: Request) {
 
         const patient = await prisma.patients.findUnique({
             where: { patient_id: patientId },
-            select: { patient_id: true, admin_id: true, full_name: true },
+            select: { patient_id: true, admin_id: true, full_name: true, phone: true, profile_type: true },
         });
         if (!patient) {
             return NextResponse.json({ error: "Patient not found" }, { status: 404 });
@@ -111,9 +171,66 @@ export async function POST(req: Request) {
             start_time: startTimeObj,
         });
 
+        const targetProfileType = booking_for === "OTHER" ? "OTHER" : "SELF";
+        let targetPatient = patient;
+
+        if (targetProfileType === "OTHER") {
+            const relatedPatients = patient.phone
+                ? await prisma.patients.findMany({
+                    where: { admin_id: patient.admin_id },
+                    select: {
+                        patient_id: true,
+                        admin_id: true,
+                        full_name: true,
+                        phone: true,
+                        profile_type: true,
+                    },
+                    orderBy: { patient_id: "desc" },
+                })
+                : [];
+
+            const existingOther = relatedPatients.find((item) =>
+                item.profile_type === "OTHER" && phonesMatch(item.phone, patient.phone)
+            ) || null;
+
+            if (existingOther) {
+                targetPatient = existingOther;
+            } else {
+                if (!patient_name) {
+                    return NextResponse.json({ error: "Other patient name is required" }, { status: 400 });
+                }
+
+                const maxBooking = await prisma.appointment.count({
+                    where: {
+                        doctor_id,
+                        clinic_id,
+                        appointment_date: apptDate,
+                    },
+                });
+
+                targetPatient = await prisma.patients.create({
+                    data: {
+                        admin_id: patient.admin_id,
+                        doctor_id,
+                        phone: patient.phone || null,
+                        full_name: patient_name,
+                        profile_type: "OTHER",
+                        booking_id: maxBooking + 1,
+                    },
+                    select: {
+                        patient_id: true,
+                        admin_id: true,
+                        full_name: true,
+                        phone: true,
+                        profile_type: true,
+                    },
+                });
+            }
+        }
+
         const existingSameDay = await prisma.appointment.findFirst({
             where: {
-                patient_id: patient.patient_id,
+                patient_id: targetPatient.patient_id,
                 doctor_id,
                 clinic_id,
                 appointment_date: apptDate,
@@ -135,6 +252,7 @@ export async function POST(req: Request) {
                     start_time: startTimeObj,
                     end_time: endTimeObj,
                     status: "BOOKED",
+                    booked_for: booking_for,
                     rescheduled_by: "PATIENT",
                     ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
                 },
@@ -149,8 +267,9 @@ export async function POST(req: Request) {
                 start_time: startTimeObj,
                 end_time: endTimeObj,
                 status: "BOOKED",
+                booked_for: booking_for,
                 patient: {
-                    connect: { patient_id: patient.patient_id },
+                    connect: { patient_id: targetPatient.patient_id },
                 },
                 doctor: {
                     connect: { doctor_id },
@@ -165,7 +284,7 @@ export async function POST(req: Request) {
             },
         });
 
-        if (patient_name && patient_name !== (patient.full_name || "")) {
+        if (targetProfileType === "SELF" && patient_name && patient_name !== (patient.full_name || "")) {
             await prisma.patients.update({
                 where: { patient_id: patient.patient_id },
                 data: { full_name: patient_name },

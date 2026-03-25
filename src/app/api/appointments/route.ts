@@ -34,6 +34,25 @@ function phonesMatch(left: string | null | undefined, right: string | null | und
     return false;
 }
 
+async function getPatientScopedIds(userId: number) {
+    const sessionPatient = await prisma.patients.findUnique({
+        where: { patient_id: userId },
+        select: { patient_id: true, phone: true, admin_id: true },
+    });
+
+    if (!sessionPatient) return [];
+    if (!sessionPatient.phone) return [sessionPatient.patient_id];
+
+    const relatedPatients = await prisma.patients.findMany({
+        where: { admin_id: sessionPatient.admin_id },
+        select: { patient_id: true, phone: true },
+    });
+
+    return relatedPatients
+        .filter((patient) => phonesMatch(patient.phone, sessionPatient.phone))
+        .map((patient) => patient.patient_id);
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -269,6 +288,7 @@ export async function POST(request: Request) {
                 full_name: true,
                 phone: true,
                 doctor_id: true,
+                profile_type: true,
             },
             orderBy: {
                 patient_id: 'desc'
@@ -276,33 +296,19 @@ export async function POST(request: Request) {
         });
 
         const matchingPatientsOnPhone = existingPatientsOnPhone.filter((p) => phonesMatch(p.phone, patient_phone));
+        const targetProfileType = booking_for === "OTHER" ? "OTHER" : "SELF";
+        const matchingPatientsForProfile = matchingPatientsOnPhone.filter((p) => p.profile_type === targetProfileType);
         const normalizedPatientName = patient_name.trim().toLowerCase();
         let patient =
-            matchingPatientsOnPhone.find((p) =>
+            matchingPatientsForProfile.find((p) =>
                 String(p.full_name || '').trim().toLowerCase() === normalizedPatientName &&
                 Number(p.doctor_id || 0) === Number(doctor_id)
             ) ||
-            matchingPatientsOnPhone.find((p) =>
+            matchingPatientsForProfile.find((p) =>
                 String(p.full_name || '').trim().toLowerCase() === normalizedPatientName
             ) ||
+            matchingPatientsForProfile[0] ||
             null;
-
-        const hasDifferentExistingName = matchingPatientsOnPhone.some((p) => {
-            const existingName = String(p.full_name || '').trim().toLowerCase();
-            return Boolean(existingName) && existingName !== normalizedPatientName;
-        });
-
-        // SELF means the doctor is booking for an already-known patient on that phone.
-        // If the phone already has another patient name and this submitted name doesn't match
-        // an existing record, force the caller to switch to OTHER instead of silently creating one.
-        if (!patient && booking_for === "SELF" && hasDifferentExistingName) {
-            return NextResponse.json(
-                {
-                    error: 'This phone already has a different patient name. Choose an existing name or book as Other.',
-                },
-                { status: 409 }
-            );
-        }
 
         if (!patient) {
             patient = await prisma.patients.create({
@@ -311,17 +317,17 @@ export async function POST(request: Request) {
                     admin_id: Number(admin_id),
                     doctor_id: Number(doctor_id),
                     booking_id: booking_id,
+                    profile_type: targetProfileType,
                     full_name: patient_name,
                 }
             });
         } else {
-            // Update existing patient with current doctor and booking id
+            // Reuse the single SELF/OTHER profile on this phone and keep its current name authoritative.
             patient = await prisma.patients.update({
                 where: { patient_id: patient.patient_id },
                 data: {
                     doctor_id: Number(doctor_id),
                     booking_id: booking_id,
-                    full_name: patient_name,
                 }
             });
         }
@@ -359,6 +365,7 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 ...rescheduled,
                 booking_for,
+                patient_name: patient.full_name,
                 patient_reused: Boolean(
                     existingPatientsOnPhone.some((p) => p.patient_id === patient.patient_id)
                 ),
@@ -392,6 +399,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
             ...appointment,
             booking_for,
+            patient_name: patient.full_name,
             patient_reused: Boolean(
                 existingPatientsOnPhone.some((p) => p.patient_id === patient.patient_id)
             ),
@@ -505,6 +513,25 @@ export async function PATCH(request: Request) {
             }
         }
 
+        if (user.role === "PATIENT") {
+            const allowedPatientIds = await getPatientScopedIds(user.patientId ?? user.userId);
+            if (allowedPatientIds.length === 0) {
+                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            }
+
+            const existingForPatient = await prisma.appointment.findFirst({
+                where: {
+                    appointment_id: Number(appointmentId),
+                    patient_id: { in: allowedPatientIds },
+                },
+                select: { appointment_id: true },
+            });
+
+            if (!existingForPatient) {
+                return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+            }
+        }
+
         const hasRescheduleFields = Boolean(appointment_date || start_time || end_time);
         if (!status && !hasRescheduleFields) {
             return NextResponse.json(
@@ -517,6 +544,25 @@ export async function PATCH(request: Request) {
             const normalizedBookingFor = String(booking_for).trim().toUpperCase();
             if (normalizedBookingFor !== "SELF" && normalizedBookingFor !== "OTHER") {
                 return NextResponse.json({ error: "Invalid booking_for value" }, { status: 400 });
+            }
+
+            const existingAppointment = await prisma.appointment.findUnique({
+                where: { appointment_id: Number(appointmentId) },
+                select: {
+                    patient: {
+                        select: {
+                            profile_type: true,
+                        },
+                    },
+                },
+            });
+
+            const currentProfileType = existingAppointment?.patient?.profile_type || "SELF";
+            if (currentProfileType !== normalizedBookingFor) {
+                return NextResponse.json(
+                    { error: "Changing booking_for on an existing appointment is not supported" },
+                    { status: 400 }
+                );
             }
         }
 

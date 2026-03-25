@@ -4,6 +4,21 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
 
+function normalizePhone(value: string | null | undefined) {
+    return String(value || "").replace(/\D/g, "");
+}
+
+function phonesMatch(left: string | null | undefined, right: string | null | undefined) {
+    const normalizedLeft = normalizePhone(left);
+    const normalizedRight = normalizePhone(right);
+    if (!normalizedLeft || !normalizedRight) return false;
+    if (normalizedLeft === normalizedRight) return true;
+    if (normalizedLeft.length >= 10 && normalizedRight.length >= 10) {
+        return normalizedLeft.slice(-10) === normalizedRight.slice(-10);
+    }
+    return false;
+}
+
 export async function GET(req: Request) {
     try {
         const session = await getSessionFromRequest(req);
@@ -21,6 +36,7 @@ export async function GET(req: Request) {
                 phone: true,
                 doctor_id: true,
                 admin_id: true,
+                profile_type: true,
                 age: true,
                 gender: true,
             },
@@ -30,13 +46,38 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Patient not found" }, { status: 404 });
         }
 
+        const relatedPatients = patient.phone
+            ? await prisma.patients.findMany({
+                where: { admin_id: patient.admin_id },
+                select: {
+                    patient_id: true,
+                    full_name: true,
+                    phone: true,
+                    profile_type: true,
+                },
+                orderBy: { patient_id: "asc" },
+            })
+            : [patient];
+
+        const phoneLinkedPatients = relatedPatients.filter((item) => phonesMatch(item.phone, patient.phone));
+        const groupedPatientIds = phoneLinkedPatients.map((item) => item.patient_id);
+        const groupedPatientIdsSet = new Set(groupedPatientIds);
+
         const appointments = await prisma.appointment.findMany({
             where: {
-                patient_id: patientId,
+                patient_id: groupedPatientIds.length > 0 ? { in: groupedPatientIds } : patientId,
                 doctor_id: { not: null },
             },
             select: {
+                patient_id: true,
                 doctor_id: true,
+                appointment_date: true,
+                start_time: true,
+                patient: {
+                    select: {
+                        profile_type: true,
+                    },
+                },
                 doctor: {
                     select: {
                         doctor_id: true,
@@ -54,11 +95,21 @@ export async function GET(req: Request) {
         const doctors = [];
         for (const appt of appointments) {
             if (!appt.doctor_id || !appt.doctor || seen.has(appt.doctor_id)) continue;
+            if (appt.patient_id != null && !groupedPatientIdsSet.has(appt.patient_id)) continue;
             seen.add(appt.doctor_id);
-            doctors.push(appt.doctor);
+            doctors.push({
+                ...appt.doctor,
+                relation_type: appt.patient?.profile_type === "OTHER" ? "OTHER" : "SELF",
+            });
         }
 
-        return NextResponse.json({ patient, doctors });
+        const linked_profiles = phoneLinkedPatients.map((item) => ({
+            patient_id: item.patient_id,
+            full_name: item.full_name,
+            profile_type: item.profile_type === "OTHER" ? "OTHER" : "SELF",
+        }));
+
+        return NextResponse.json({ patient, doctors, linked_profiles });
     } catch (error) {
         console.error("Patient me error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
