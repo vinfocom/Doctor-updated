@@ -21,6 +21,72 @@ function phonesMatch(left: string | null | undefined, right: string | null | und
     return false;
 }
 
+async function releaseCancelledSlotReservation(appointmentId: number) {
+    const existing = await prisma.appointment.findUnique({
+        where: { appointment_id: appointmentId },
+        select: {
+            appointment_id: true,
+            doctor_id: true,
+            appointment_date: true,
+            start_time: true,
+            end_time: true,
+            status: true,
+        },
+    });
+
+    if (!existing || existing.status !== "CANCELLED" || !existing.start_time) {
+        return existing;
+    }
+
+    const minuteStart = new Date(existing.start_time);
+    minuteStart.setUTCSeconds(0, 0);
+    const minuteEnd = new Date(minuteStart);
+    minuteEnd.setUTCMinutes(minuteEnd.getUTCMinutes() + 1);
+
+    const cancelledInSameMinute = await prisma.appointment.findMany({
+        where: {
+            doctor_id: existing.doctor_id,
+            appointment_date: existing.appointment_date,
+            status: "CANCELLED",
+            appointment_id: { not: existing.appointment_id },
+            start_time: {
+                gte: minuteStart,
+                lt: minuteEnd,
+            },
+        },
+        select: { start_time: true },
+    });
+
+    const usedSeconds = new Set(
+        cancelledInSameMinute
+            .map((item) => item.start_time?.getUTCSeconds())
+            .filter((value): value is number => typeof value === "number")
+    );
+
+    let nextSecond = 1;
+    while (usedSeconds.has(nextSecond) && nextSecond < 59) {
+        nextSecond += 1;
+    }
+
+    const releasedStart = new Date(minuteStart);
+    releasedStart.setUTCSeconds(nextSecond, 0);
+
+    const updateData: Record<string, Date> = {
+        start_time: releasedStart,
+    };
+
+    if (existing.end_time) {
+        const releasedEnd = new Date(existing.end_time);
+        releasedEnd.setUTCSeconds(nextSecond, 0);
+        updateData.end_time = releasedEnd;
+    }
+
+    return prisma.appointment.update({
+        where: { appointment_id: appointmentId },
+        data: updateData,
+    });
+}
+
 export async function GET(req: Request) {
     try {
         const session = await getSessionFromRequest(req);
@@ -338,9 +404,11 @@ export async function PATCH(req: Request) {
             },
         });
 
-        const safe = JSON.parse(JSON.stringify(updated, (_k, v) =>
+        const released = await releaseCancelledSlotReservation(appointmentId);
+        const safe = JSON.parse(JSON.stringify(released || updated, (_k, v) =>
             typeof v === "bigint" ? v.toString() : v
         ));
+
         return NextResponse.json({ appointment: safe });
     } catch (error) {
         console.error("Patient appointments PATCH error:", error);

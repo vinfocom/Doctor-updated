@@ -34,6 +34,72 @@ function phonesMatch(left: string | null | undefined, right: string | null | und
     return false;
 }
 
+async function releaseCancelledSlotReservation(appointmentId: number) {
+    const existing = await prisma.appointment.findUnique({
+        where: { appointment_id: appointmentId },
+        select: {
+            appointment_id: true,
+            doctor_id: true,
+            appointment_date: true,
+            start_time: true,
+            end_time: true,
+            status: true,
+        },
+    });
+
+    if (!existing || existing.status !== "CANCELLED" || !existing.start_time) {
+        return existing;
+    }
+
+    const minuteStart = new Date(existing.start_time);
+    minuteStart.setUTCSeconds(0, 0);
+    const minuteEnd = new Date(minuteStart);
+    minuteEnd.setUTCMinutes(minuteEnd.getUTCMinutes() + 1);
+
+    const cancelledInSameMinute = await prisma.appointment.findMany({
+        where: {
+            doctor_id: existing.doctor_id,
+            appointment_date: existing.appointment_date,
+            status: "CANCELLED",
+            appointment_id: { not: existing.appointment_id },
+            start_time: {
+                gte: minuteStart,
+                lt: minuteEnd,
+            },
+        },
+        select: { start_time: true },
+    });
+
+    const usedSeconds = new Set(
+        cancelledInSameMinute
+            .map((item) => item.start_time?.getUTCSeconds())
+            .filter((value): value is number => typeof value === "number")
+    );
+
+    let nextSecond = 1;
+    while (usedSeconds.has(nextSecond) && nextSecond < 59) {
+        nextSecond += 1;
+    }
+
+    const releasedStart = new Date(minuteStart);
+    releasedStart.setUTCSeconds(nextSecond, 0);
+
+    const updateData: Record<string, Date> = {
+        start_time: releasedStart,
+    };
+
+    if (existing.end_time) {
+        const releasedEnd = new Date(existing.end_time);
+        releasedEnd.setUTCSeconds(nextSecond, 0);
+        updateData.end_time = releasedEnd;
+    }
+
+    return prisma.appointment.update({
+        where: { appointment_id: appointmentId },
+        data: updateData,
+    });
+}
+
 async function getPatientScopedIds(userId: number) {
     const sessionPatient = await prisma.patients.findUnique({
         where: { patient_id: userId },
@@ -342,12 +408,34 @@ export async function POST(request: Request) {
             orderBy: { appointment_id: "desc" },
         });
 
+        const existingExactSlot = await prisma.appointment.findFirst({
+            where: {
+                doctor_id: Number(doctor_id),
+                appointment_date: dateObj,
+                start_time: startTimeObj,
+            },
+            orderBy: { appointment_id: "desc" },
+        });
+
         if (existingSameDay) {
             if (existingSameDay.status === "COMPLETED") {
                 return NextResponse.json(
                     { error: "Appointment already completed for this date. Please choose another date." },
                     { status: 409 }
                 );
+            }
+
+            if (
+                existingExactSlot &&
+                existingExactSlot.appointment_id !== existingSameDay.appointment_id
+            ) {
+                if (existingExactSlot.status !== "CANCELLED") {
+                    return NextResponse.json(
+                        { error: "Slot already booked" },
+                        { status: 409 }
+                    );
+                }
+                await releaseCancelledSlotReservation(existingExactSlot.appointment_id);
             }
 
             const rescheduled = await prisma.appointment.update({
@@ -371,6 +459,16 @@ export async function POST(request: Request) {
                 ),
                 rescheduled_existing: true,
             });
+        }
+
+        if (existingExactSlot) {
+            if (existingExactSlot.status !== "CANCELLED") {
+                return NextResponse.json(
+                    { error: "Slot already booked" },
+                    { status: 409 }
+                );
+            }
+            await releaseCancelledSlotReservation(existingExactSlot.appointment_id);
         }
 
         const appointment = await prisma.appointment.create({
@@ -567,6 +665,23 @@ export async function PATCH(request: Request) {
         }
 
         const updateData: Record<string, unknown> = {};
+        const currentAppointment = await prisma.appointment.findUnique({
+            where: { appointment_id: Number(appointmentId) },
+            select: {
+                appointment_id: true,
+                doctor_id: true,
+                clinic_id: true,
+                appointment_date: true,
+                start_time: true,
+                end_time: true,
+                status: true,
+            },
+        });
+
+        if (!currentAppointment) {
+            return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+        }
+
         if (status) updateData.status = status;
         if (appointment_date) updateData.appointment_date = parseISTDate(appointment_date);
         if (start_time) updateData.start_time = parseISTTimeToUTCDate(start_time);
@@ -579,21 +694,49 @@ export async function PATCH(request: Request) {
         }
 
         if (hasRescheduleFields) {
-            const existing = await prisma.appointment.findUnique({
-                where: { appointment_id: Number(appointmentId) },
-                select: { doctor_id: true, clinic_id: true, appointment_date: true, start_time: true },
-            });
-
-            const nextDate = appointment_date ? parseISTDate(appointment_date) : existing?.appointment_date || null;
-            const nextStart = start_time ? parseISTTimeToUTCDate(start_time) : existing?.start_time || null;
+            const nextDate = appointment_date ? parseISTDate(appointment_date) : currentAppointment.appointment_date || null;
+            const nextStart = start_time ? parseISTTimeToUTCDate(start_time) : currentAppointment.start_time || null;
             const bookingId = await computeBookingIdForAppointment({
-                doctor_id: existing?.doctor_id ?? null,
-                clinic_id: existing?.clinic_id ?? null,
+                doctor_id: currentAppointment.doctor_id ?? null,
+                clinic_id: currentAppointment.clinic_id ?? null,
                 appointment_date: nextDate,
                 start_time: nextStart,
             });
             if (bookingId != null) {
                 updateData.booking_id = bookingId;
+            }
+
+            if (nextDate && nextStart) {
+                const exactSlotConflict = await prisma.appointment.findFirst({
+                    where: {
+                        appointment_id: { not: Number(appointmentId) },
+                        doctor_id: currentAppointment.doctor_id ?? undefined,
+                        appointment_date: nextDate,
+                        start_time: nextStart,
+                    },
+                    orderBy: { appointment_id: "desc" },
+                });
+
+                if (exactSlotConflict) {
+                    if (exactSlotConflict.status === "CANCELLED") {
+                        await releaseCancelledSlotReservation(exactSlotConflict.appointment_id);
+                    } else {
+                        return NextResponse.json(
+                            { error: "Slot already booked" },
+                            { status: 409 }
+                        );
+                    }
+                }
+            }
+        }
+
+        if (status === "CANCELLED" && currentAppointment.status !== "CANCELLED") {
+            const released = await releaseCancelledSlotReservation(Number(appointmentId));
+            if (released?.start_time) {
+                updateData.start_time = released.start_time;
+            }
+            if (released?.end_time) {
+                updateData.end_time = released.end_time;
             }
         }
 
