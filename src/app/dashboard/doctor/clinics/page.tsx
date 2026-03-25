@@ -391,7 +391,7 @@ export default function ClinicsPage() {
 
             setQrPreviewImage(previewData.dataUrl || "");
 
-            const url = `https://msgbot.duckdns.org/qr/generate/download?doctor_id=${clinic.doctor_id}&clinic_id=${clinic.clinic_id}`;
+            const url = `https://daptoservices.vinfocom.co.in/download?doctor_id=${clinic.doctor_id}&clinic_id=${clinic.clinic_id}`;
             await fetch(`/api/clinics/${clinic.clinic_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },

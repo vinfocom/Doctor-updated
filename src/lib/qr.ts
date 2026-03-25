@@ -1,5 +1,5 @@
-const QR_PREVIEW_ENDPOINT = "https://msgbot.duckdns.org/qr/generate";
-const QR_DOWNLOAD_ENDPOINT = "https://msgbot.duckdns.org/qr/generate/download";
+const QR_PREVIEW_ENDPOINT = "https://daptoservices.vinfocom.co.in/qr/generate";
+const QR_DOWNLOAD_ENDPOINT = "https://daptoservices.vinfocom.co.in/qr/generate/download";
 
 type PreviewPayload = {
     doctor_id: number;
