@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Check, UserX, CalendarSync, Trash2, X, Filter, RotateCcw, Stethoscope, User, Download } from "lucide-react";
+import { Check, UserX, CalendarSync, Trash2, X, Filter, RotateCcw, Stethoscope, User, Download, ChevronDown } from "lucide-react";
 import AppointmentExportModal from "@/components/AppointmentExportModal";
 
 interface Appointment {
@@ -249,6 +249,19 @@ export default function DoctorAppointmentsPage() {
         });
     }, [appointments]);
 
+    const groupedByClinic = useMemo(() => {
+        const groups = new Map<string, { name: string; appointments: Appointment[] }>();
+        sortedAppointments.forEach((apt) => {
+            const clinicName = apt.clinic?.clinic_name?.trim() || "Unknown Clinic";
+            const key = apt.clinic?.clinic_id ? `clinic-${apt.clinic.clinic_id}` : `clinic-${clinicName}`;
+            if (!groups.has(key)) {
+                groups.set(key, { name: clinicName, appointments: [] });
+            }
+            groups.get(key)?.appointments.push(apt);
+        });
+        return Array.from(groups.values());
+    }, [sortedAppointments]);
+
     const handleStatusUpdate = async (appointmentId: number, status: string) => {
         const body: Record<string, unknown> = { appointmentId, status };
         if (status === 'CANCELLED') body.cancelled_by = 'DOCTOR';
@@ -485,99 +498,130 @@ export default function DoctorAppointmentsPage() {
             <motion.div className="glass-card p-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 {appointments.length === 0 ? (
                     <div className="text-center py-12">
-                        <p className="text-4xl mb-3">📋</p>
                         <p className="text-gray-400">No appointments yet</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead><tr><th>Patient</th><th>Appointment No.</th><th>Phone</th><th>Date & Time</th><th>Status</th><th>Actions</th></tr></thead>
-                            <tbody>
-                                {sortedAppointments.map((apt, i) => (
-                                    <motion.tr key={apt.appointment_id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}>
-                                        <td>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center text-xs font-bold text-white">
-                                                    {apt.patient?.full_name?.charAt(0)?.toUpperCase()}
-                                                </div>
-                                                <span className="text-gray-800 font-medium">{apt.patient?.full_name || "N/A"}</span>
+                    <div className="flex flex-col gap-4">
+                        {groupedByClinic.map((group, gi) => (
+                            <motion.div
+                                key={`${group.name}-${gi}`}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + gi * 0.05 }}
+                                className="border border-gray-200 rounded-xl bg-white/70 shadow-sm"
+                            >
+                                <details className="group">
+                                    <summary className="flex items-center justify-between gap-3 cursor-pointer px-5 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 text-indigo-700 flex items-center justify-center font-bold">
+                                                {group.name.charAt(0).toUpperCase()}
                                             </div>
-                                        </td>
-                                        <td className="text-gray-500 font-medium">
-                                            {apt.booking_id ?? apt.appointment_id}
-                                        </td>
-                                        <td className="text-gray-500">{apt.patient?.phone || "N/A"}</td>
-                                        <td className="text-gray-500">
-                                            {apt.appointment_date
-                                                ? toISTDateStr(apt.appointment_date)
-                                                : "N/A"}{" "}
-                                            {apt.start_time
-                                                ? convertTo12Hour(formatTime(apt.start_time))
-                                                : ""}
-                                        </td>
-                                        <td>
-                                            {(() => {
-                                                const tone = getStatusTone(apt);
-                                                const StatusIcon = tone.Icon;
+                                            <div className="text-base font-medium text-gray-900">{group.name}</div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                                                {group.appointments.length} appointment{group.appointments.length !== 1 ? "s" : ""}
+                                            </span>
+                                            <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
+                                        </div>
+                                    </summary>
+                                    <div className="border-t border-gray-100 px-5 pb-5 pt-3">
+                                        <div className="overflow-x-auto">
+                                            <table className="data-table">
+                                                <thead><tr><th>Patient</th><th>Appointment No.</th><th>Phone</th><th>Date & Time</th><th>Status</th><th>Actions</th></tr></thead>
+                                                <tbody>
+                                                    {group.appointments.map((apt, i) => (
+                                                        <motion.tr key={apt.appointment_id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.03 }}>
+                                                            <td>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center text-xs font-bold text-white">
+                                                                        {apt.patient?.full_name?.charAt(0)?.toUpperCase()}
+                                                                    </div>
+                                                                    <span className="text-gray-800 font-medium">{apt.patient?.full_name || "N/A"}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="text-gray-500 font-medium">
+                                                                {apt.booking_id ?? apt.appointment_id}
+                                                            </td>
+                                                            <td className="text-gray-500">{apt.patient?.phone || "N/A"}</td>
+                                                            <td className="text-gray-500">
+                                                                {apt.appointment_date
+                                                                    ? toISTDateStr(apt.appointment_date)
+                                                                    : "N/A"}{" "}
+                                                                {apt.start_time
+                                                                    ? convertTo12Hour(formatTime(apt.start_time))
+                                                                    : ""}
+                                                            </td>
+                                                            <td>
+                                                                {(() => {
+                                                                    const tone = getStatusTone(apt);
+                                                                    const StatusIcon = tone.Icon;
 
-                                                return (
-                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${tone.wrapper}`}>
-                                                        <StatusIcon size={14} className={tone.iconWrap} />
-                                                        {getAppointmentStatusLabel(apt)}
-                                                    </span>
-                                                );
-                                            })()}
-                                        </td>
-                                        <td>
-                                            <div className="flex gap-2">
-                                                {/* Only show action buttons for DOCTOR or HAVE_ACCESS staff */}
-                                                {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && (
-                                                    <>
-                                                        {apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && apt.status !== "PENDING" && (
-                                                            <>
-                                                                <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "COMPLETED")} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Complete" aria-label="Complete">
-                                                                    <Check size={16} />
-                                                                </motion.button>
-                                                                <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "PENDING")} className="text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Not Visited" aria-label="Not Visited">
-                                                                    <UserX size={16} />
-                                                                </motion.button>
-                                                                <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "CANCELLED")} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Cancel" aria-label="Cancel">
-                                                                    <X size={16} />
-                                                                </motion.button>
-                                                            </>
-                                                        )}
-                                                        <motion.button onClick={() => setRescheduleAppointment(apt)} className="text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Reschedule" aria-label="Reschedule">
-                                                            <CalendarSync size={16} />
-                                                        </motion.button>
-                                                    </>
-                                                )}
-                                                {/* Only DOCTOR or HAVE_ACCESS staff can delete */}
-                                                {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && (
-                                                    <motion.button
-                                                        onClick={() => setDeleteAppointment(apt)}
-                                                        className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                                                        whileHover={{ scale: 1.05 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                        title="Delete"
-                                                        aria-label="Delete"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </motion.button>
-                                                )}
-                                                {/* VIEWER staff only see status badge, no actions */}
-                                                {userRole === "CLINIC_STAFF" && staffRole !== "HAVE_ACCESS" && (
-                                                    <span className="text-xs text-gray-400 italic">View only</span>
-                                                )}
-                                            </div>
-                                        </td>
+                                                                    return (
+                                                                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${tone.wrapper}`}>
+                                                                            <StatusIcon size={14} className={tone.iconWrap} />
+                                                                            {getAppointmentStatusLabel(apt)}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                            </td>
+                                                            <td>
+                                                                <div className="flex gap-2">
+                                                                    {/* Only show action buttons for DOCTOR or HAVE_ACCESS staff */}
+                                                                    {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && (
+                                                                        <>
+                                                                            {apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && apt.status !== "PENDING" && (
+                                                                                <>
+                                                                                    <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "COMPLETED")} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Complete" aria-label="Complete">
+                                                                                        <Check size={16} />
+                                                                                    </motion.button>
+                                                                                    <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "PENDING")} className="text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Not Visited" aria-label="Not Visited">
+                                                                                        <UserX size={16} />
+                                                                                    </motion.button>
+                                                                                    <motion.button onClick={() => handleStatusUpdate(apt.appointment_id, "CANCELLED")} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Cancel" aria-label="Cancel">
+                                                                                        <X size={16} />
+                                                                                    </motion.button>
+                                                                                </>
+                                                                            )}
+                                                                            <motion.button onClick={() => setRescheduleAppointment(apt)} className="text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Reschedule" aria-label="Reschedule">
+                                                                                <CalendarSync size={16} />
+                                                                            </motion.button>
+                                                                        </>
+                                                                    )}
+                                                                    {/* Only DOCTOR or HAVE_ACCESS staff can delete */}
+                                                                    {(userRole === "DOCTOR" || staffRole === "HAVE_ACCESS") && (
+                                                                        <motion.button
+                                                                            onClick={() => setDeleteAppointment(apt)}
+                                                                            className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                                                                            whileHover={{ scale: 1.05 }}
+                                                                            whileTap={{ scale: 0.95 }}
+                                                                            title="Delete"
+                                                                            aria-label="Delete"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </motion.button>
+                                                                    )}
+                                                                    {/* VIEWER staff only see status badge, no actions */}
+                                                                    {userRole === "CLINIC_STAFF" && staffRole !== "HAVE_ACCESS" && (
+                                                                        <span className="text-xs text-gray-400 italic">View only</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
 
-                                    </motion.tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                                        </motion.tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </details>
+                            </motion.div>
+                        ))}
                     </div>
                 )}
             </motion.div>
         </div>
     );
 }
+
+

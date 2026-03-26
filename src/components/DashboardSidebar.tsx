@@ -36,6 +36,10 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
         router.push("/login");
     };
 
+    const displayName = role === "DOCTOR" && userName
+        ? (/^dr\.?\s/i.test(userName.trim()) ? userName.trim() : `Dr. ${userName.trim()}`)
+        : userName;
+
     const links = {
         SUPER_ADMIN: [
             { href: "/dashboard/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -132,7 +136,7 @@ export default function DashboardSidebar({ role, userName }: SidebarProps) {
                         {userName?.charAt(0)?.toUpperCase() || "U"}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 truncate">{userName}</p>
+                        <p className="text-sm font-semibold text-gray-800 truncate">{displayName}</p>
                         <p className="text-[11px] text-gray-400 tracking-wide uppercase">{role.replace("_", " ")}</p>
                     </div>
                 </div>

@@ -59,6 +59,12 @@ interface DoctorProfile {
 
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+const formatDoctorName = (name?: string | null) => {
+    const clean = String(name || "").trim();
+    if (!clean) return "—";
+    return /^dr\.?\s/i.test(clean) ? clean : `Dr. ${clean}`;
+};
+
 type UploadType = "profile_pic" | "document";
 
 async function uploadFile(file: File, type: UploadType): Promise<string> {
@@ -335,7 +341,7 @@ export default function DoctorProfilePage() {
                                 <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                             </div>
                             <div className="text-center">
-                                <p className="font-bold text-gray-900 text-lg">{profile?.doctor_name || "—"}</p>
+                                <p className="font-bold text-gray-900 text-lg">{formatDoctorName(profile?.doctor_name)}</p>
                                 <p className="text-sm text-indigo-600">{profile?.specialization || "—"}</p>
                                 {profile?.profile_pic_url && (
                                     <a
