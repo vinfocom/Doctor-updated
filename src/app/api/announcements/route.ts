@@ -107,7 +107,7 @@ async function getDoctorTargetPatients(userId: number, targetMode: TargetMode = 
     const patientsList = Array.from(uniquePatients.values());
     const patientIds = patientsList.map(p => p.patient_id);
 
-    return { doctorId: doctor.doctor_id, patientIds, patientsList };
+    return { doctorId: doctor.doctor_id, patientIds, patientsList, filterDate };
 }
 
 async function getDoctorAnnouncementDates(userId: number) {
@@ -507,6 +507,7 @@ export async function POST(req: Request) {
                     campaign_id: true,
                     doctor_id: true,
                     message: true,
+                    target_date: true,
                     recipients: { select: { patient_id: true } },
                 },
             });
@@ -526,7 +527,8 @@ export async function POST(req: Request) {
                 doctorId: doctor.doctor_id,
                 message,
                 recipientIds,
-                targetMode: "TODAY",
+                targetMode: "CUSTOM",
+                targetDate: toISTYMD(anchor.target_date) || undefined,
             });
             const contentForChat = await mirrorCampaignToChatMessages({
                 doctorId: doctor.doctor_id,
@@ -578,7 +580,7 @@ export async function POST(req: Request) {
             message,
             recipientIds: targets.patientIds,
             targetMode,
-            targetDate,
+            targetDate: targets.filterDate,
         });
         const contentForChat = await mirrorCampaignToChatMessages({
             doctorId: targets.doctorId,
