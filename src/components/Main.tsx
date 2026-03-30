@@ -211,6 +211,11 @@ export default function Main() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-gray-200 py-8 text-center text-gray-400 text-sm">
+        <p className="mb-2">
+          <Link href="/privacy-policy" className="text-gray-500 hover:text-gray-700">
+            Privacy Policy
+          </Link>
+        </p>
         <p>© 2026 Vinfocom IT Services Pvt. Ltd. All rights reserved.</p>
       </footer>
     </div>
