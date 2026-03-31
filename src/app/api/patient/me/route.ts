@@ -125,6 +125,18 @@ export async function PATCH(req: Request) {
         }
 
         const patientId = session.patientId ?? session.userId;
+        const currentPatient = await prisma.patients.findUnique({
+            where: { patient_id: patientId },
+            select: {
+                patient_id: true,
+                admin_id: true,
+                phone: true,
+            },
+        });
+
+        if (!currentPatient) {
+            return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+        }
 
         const body = await req.json();
         const { full_name, phone, age, gender, push_token } = body;
@@ -151,16 +163,57 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: "No valid fields provided" }, { status: 400 });
         }
 
-        const updated = await prisma.patients.update({
-            where: { patient_id: patientId },
-            data: updateData,
-            select: {
-                patient_id: true,
-                full_name: true,
-                phone: true,
-                age: true,
-                gender: true,
-            },
+        const nextPhoneValue =
+            phone !== undefined ? String(phone).trim() : currentPatient.phone;
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const updatedPatient = await tx.patients.update({
+                where: { patient_id: patientId },
+                data: updateData,
+                select: {
+                    patient_id: true,
+                    full_name: true,
+                    phone: true,
+                    age: true,
+                    gender: true,
+                },
+            });
+
+            // A patient may have multiple linked rows under the same admin/phone
+            // (for SELF/OTHER profiles). Keep push tokens in sync so doctor->patient
+            // notifications still target the active device regardless of which
+            // linked patient_id owns the appointment/chat thread.
+            if (push_token !== undefined && nextPhoneValue) {
+                const linkedPatients = await tx.patients.findMany({
+                    where: { admin_id: currentPatient.admin_id },
+                    select: {
+                        patient_id: true,
+                        phone: true,
+                    },
+                });
+
+                const linkedPatientIds = linkedPatients
+                    .filter((item) => phonesMatch(item.phone, nextPhoneValue))
+                    .map((item) => item.patient_id);
+
+                if (linkedPatientIds.length > 1) {
+                    await tx.patients.updateMany({
+                        where: {
+                            patient_id: { in: linkedPatientIds },
+                        },
+                        data: {
+                            push_token: updateData.push_token as string | null,
+                        },
+                    });
+                }
+
+                console.log("[patient-profile] PATCH synced push token to linked patients", {
+                    patientId,
+                    linkedPatientIds,
+                });
+            }
+
+            return updatedPatient;
         });
         console.log("[patient-profile] PATCH updated successfully", {
             patientId,
