@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/request-auth";
-import { sendExpoPushNotification } from "@/lib/expoPush";
+import { isExpoPushToken, sendChatPushNotification } from "@/lib/expoPush";
+
+type SocketEmitter = {
+    to: (room: string) => {
+        emit: (event: string, payload: unknown) => void;
+    };
+};
 
 // GET /api/chat?patient_id=...&doctor_id=...
 export async function GET(request: NextRequest) {
@@ -160,7 +166,7 @@ export async function POST(request: NextRequest) {
             },
         });
         const room = `chat_patient_${patientIdNum}_doctor_${doctorIdNum}`;
-        const io = (globalThis as any).__DOCTOR_IO__;
+        const io = (globalThis as typeof globalThis & { __DOCTOR_IO__?: SocketEmitter }).__DOCTOR_IO__;
         if (io && typeof io.to === "function") {
             io.to(room).emit("receive_message", {
                 message_id: message.message_id,
@@ -200,12 +206,15 @@ export async function POST(request: NextRequest) {
 
                 const senderName =
                     sender === "DOCTOR"
-                        ? `Dr. ${doc?.doctor_name || "Doctor"}`
+                        ? doc?.doctor_name || "Doctor"
                         : patient?.full_name || "Patient";
 
                 const bodyText = safeContent
                     ? (safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent)
                     : "Sent an attachment";
+
+                const targetTokens = Array.from(tokens);
+                const validTargetTokens = targetTokens.filter((token) => isExpoPushToken(token));
 
                 console.log("[chat-push] preparing push", {
                     sender,
@@ -213,29 +222,26 @@ export async function POST(request: NextRequest) {
                     doctorId: doctorIdNum,
                     patientPushToken: patient?.push_token ?? null,
                     doctorPushToken: doc?.push_token ?? null,
-                    targetTokens: Array.from(tokens),
+                    targetTokens,
+                    validTargetTokens,
                     bodyText,
                 });
 
-                if (tokens.size > 0) {
-                    await sendExpoPushNotification({
-                        to: Array.from(tokens),
-                        title: `New message from ${senderName}`,
+                if (validTargetTokens.length > 0) {
+                    await sendChatPushNotification({
+                        tokens: validTargetTokens,
+                        patientId: patientIdNum,
+                        doctorId: doctorIdNum,
+                        senderRole: sender,
+                        senderName,
                         body: bodyText,
-                        data: {
-                            type: "chat",
-                            patientId: patientIdNum,
-                            doctorId: doctorIdNum,
-                            senderRole: sender,
-                            senderName,
-                        },
-                        sound: "default",
                     });
                 } else {
-                    console.log("[chat-push] skipped because no target push token was available", {
+                    console.log("[chat-push] skipped because no valid target push token was available", {
                         sender,
                         patientId: patientIdNum,
                         doctorId: doctorIdNum,
+                        targetTokens,
                     });
                 }
             } catch (err) {

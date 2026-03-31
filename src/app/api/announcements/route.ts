@@ -253,8 +253,10 @@ function emitAnnouncementEvents(params: {
                             campaignId: params.campaignId,
                         },
                         sound: "default",
-                        });
-                    }
+                        channelId: "default",
+                        priority: "high",
+                    });
+                }
             } else {
                 console.log("[announcement-push] skipped because no patient push tokens were available", {
                     doctorId: params.doctorId,
