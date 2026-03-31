@@ -175,7 +175,7 @@ export async function PATCH(req: Request) {
         const nextPhoneValue =
             phone !== undefined ? String(phone).trim() : currentPatient.phone;
 
-        const updated = await prisma.$transaction(async (tx: typeof prisma) => {
+        const updated = await prisma.$transaction(async (tx) => {
             const updatedPatient = await tx.patients.update({
                 where: { patient_id: patientId },
                 data: updateData,
