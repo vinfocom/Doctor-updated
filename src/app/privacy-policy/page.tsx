@@ -5,8 +5,8 @@ export const metadata: Metadata = {
   description: "Privacy Policy for the Dapto mobile and web application.",
 };
 
-const LAST_UPDATED = "March 30, 2026";
-const CONTACT_EMAIL = "support@vinfocom.co.in";
+const LAST_UPDATED = "April 2, 2026";
+const CONTACT_EMAIL = "dapptosupport@gmail.com";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -15,9 +15,7 @@ export default function PrivacyPolicyPage() {
         <h1 className="text-3xl font-bold text-gray-900">Privacy Policy</h1>
         <p className="mt-2 text-sm text-gray-600">Last Updated: {LAST_UPDATED}</p>
         <p className="mt-6 text-gray-700 leading-7">
-          This Privacy Policy explains how Dapto, operated by Vinfocom IT Services Pvt. Ltd.
-          (Dapto, we, us, or our), collects, uses, shares, and protects information when you use
-          the Dapto mobile app and related services.
+          This Privacy Policy describes how Dapto (“we”, “us”, or “our”), operated by an independent development team led by Kanika, collects, uses, discloses, and safeguards your information when you use the Dapto mobile application and related services.
         </p>
 
         <section className="mt-8 space-y-3">
@@ -70,10 +68,10 @@ export default function PrivacyPolicyPage() {
         <section className="mt-8 space-y-3">
           <h2 className="text-xl font-semibold text-gray-900">3. How We Use Information</h2>
           <ul className="list-disc space-y-2 pl-6 text-gray-700 leading-7">
-            <li>To create and manage user accounts and provide secure login access.</li>
+            <li>To create and manage user accounts and provide secure access to the app.</li>
             <li>To schedule, manage, and track appointments and clinic workflows.</li>
             <li>To enable real-time communication between doctors and patients.</li>
-            <li>To send reminders, alerts, and administrative notifications.</li>
+            <li>To send chat notifications and announcements.</li>
             <li>To store and retrieve uploaded files required for app functionality.</li>
             <li>To maintain service reliability, security, and fraud/abuse prevention.</li>
           </ul>
@@ -128,8 +126,9 @@ export default function PrivacyPolicyPage() {
         <section className="mt-8 space-y-3">
           <h2 className="text-xl font-semibold text-gray-900">7. Data Security and Confidentiality</h2>
           <p className="text-gray-700 leading-7">
-            We use reasonable technical and organizational measures to help protect personal
-            information against unauthorized access, loss, misuse, or alteration.
+            {/* We use reasonable technical and organizational measures to help protect personal
+            information against unauthorized access, loss, misuse, or alteration. */}
+            We implement reasonable technical and organizational measures to protect personal information against unauthorized access, loss, misuse, or alteration.
           </p>
           <p className="text-gray-700 leading-7">
             Sensitive data is handled as confidential information and protected with encryption and
@@ -140,7 +139,10 @@ export default function PrivacyPolicyPage() {
             rest, as configured.
           </p>
           <p className="text-gray-700 leading-7">
-            No system is 100% secure, and we cannot guarantee absolute security.
+            {/* No system is 100% secure, and we cannot guarantee absolute security. */}
+            {/* While we take all reasonable measures to protect your data and ensure its security, there may be inherent system vulnerabilities or unforeseen gaps that could result in unauthorized access or data breaches. */}
+            {/* While we take all reasonable steps to protect your data, no method of transmission or storage is completely secure. There may be inherent system vulnerabilities or unforeseen gaps that could result in unauthorized access or data breaches. */}
+            While we implement reasonable and industry-standard security measures to protect your data, no method of transmission or storage is completely secure. We cannot guarantee absolute security of your information, and there may be unforeseen vulnerabilities that could result in unauthorized access, disclosure, or data breaches. We shall not be held liable for any loss or damage arising from such incidents beyond our reasonable control.
           </p>
         </section>
 
