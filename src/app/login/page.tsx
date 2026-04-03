@@ -1,30 +1,152 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Eye, EyeOff } from "lucide-react";
+import { Calculator, Eye, EyeOff, RefreshCw } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
     const [form, setForm] = useState({ email: "", password: "" });
+    const [challengeId, setChallengeId] = useState("");
+    const [challengeQuestion, setChallengeQuestion] = useState("");
+    const [challengeAnswer, setChallengeAnswer] = useState("");
+    const [challengeVerificationToken, setChallengeVerificationToken] = useState("");
+    const [challengeVerified, setChallengeVerified] = useState(false);
+    const [challengeMessage, setChallengeMessage] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [challengeLoading, setChallengeLoading] = useState(false);
+    const [verifyingChallenge, setVerifyingChallenge] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    const canSubmit = useMemo(
+        () =>
+            Boolean(
+                form.email.trim() &&
+                form.password &&
+                challengeId &&
+                challengeVerificationToken &&
+                challengeAnswer.trim() &&
+                challengeVerified
+            ) && !loading,
+        [challengeAnswer, challengeId, challengeVerificationToken, challengeVerified, form.email, form.password, loading]
+    );
+
+    const loadChallenge = async (clearAnswer = true) => {
+        setChallengeLoading(true);
+        setError("");
+        setChallengeMessage("");
+        setChallengeVerified(false);
+        setChallengeVerificationToken("");
+
+        try {
+            const res = await fetch("/api/auth/login-challenge", { cache: "no-store" });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.error || "Unable to load calculation");
+                setChallengeId("");
+                setChallengeQuestion("");
+                return;
+            }
+
+            setChallengeId(data.challengeId || "");
+            setChallengeQuestion(data.question || "");
+            if (clearAnswer) {
+                setChallengeAnswer("");
+            }
+        } catch {
+            setError("Unable to load calculation");
+            setChallengeId("");
+            setChallengeQuestion("");
+        } finally {
+            setChallengeLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadChallenge();
+    }, []);
+
+    useEffect(() => {
+        if (challengeVerified) {
+            setChallengeVerified(false);
+            setChallengeMessage("");
+            setChallengeVerificationToken("");
+        }
+    }, [challengeAnswer, challengeVerified]);
+
+    const handleVerifyChallenge = async () => {
+        if (!challengeId || !challengeAnswer.trim()) {
+            setError("Enter the calculation answer before verifying.");
+            return;
+        }
+
+        setVerifyingChallenge(true);
+        setError("");
+        setChallengeMessage("");
+        setChallengeVerified(false);
+        setChallengeVerificationToken("");
+
+        try {
+            const res = await fetch("/api/auth/login-challenge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    challengeId,
+                    answer: challengeAnswer.trim(),
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                const message = data.error || "Wrong answer";
+                await loadChallenge();
+                setError(message);
+                return;
+            }
+
+            setChallengeVerificationToken(data.verificationToken || "");
+            setChallengeVerified(true);
+            setChallengeMessage("Verified");
+        } catch {
+            setError("Unable to verify calculation right now.");
+        } finally {
+            setVerifyingChallenge(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setChallengeMessage("");
+
+        if (!challengeVerified || !challengeId || !challengeVerificationToken) {
+            setError("Please verify the calculation before signing in.");
+            return;
+        }
+
         setLoading(true);
 
         try {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(form),
+                body: JSON.stringify({
+                    ...form,
+                    challengeId,
+                    challengeVerificationToken,
+                }),
             });
 
             const data = await res.json();
-            if (!res.ok) { setError(data.error); return; }
+            if (!res.ok) {
+                setError(data.error);
+                if (res.status === 400) {
+                    setChallengeVerified(false);
+                    await loadChallenge();
+                }
+                return;
+            }
 
             const role = data.user.role;
             if (role === "SUPER_ADMIN" || role === "ADMIN") router.push("/dashboard/admin");
@@ -124,11 +246,57 @@ export default function LoginPage() {
                                 </button>
                             </div>
                         </div>
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                                <label className="block text-sm font-medium text-gray-700">Quick Verification</label>
+                                <button
+                                    type="button"
+                                    onClick={() => loadChallenge()}
+                                    disabled={challengeLoading || verifyingChallenge}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 transition hover:text-indigo-800 disabled:opacity-50"
+                                >
+                                    <RefreshCw size={14} />
+                                    Regenerate
+                                </button>
+                            </div>
+                            <div className="mb-3 flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm">
+                                <Calculator size={16} className="text-indigo-600" />
+                                {challengeLoading ? (
+                                    <span>Loading calculation...</span>
+                                ) : challengeQuestion ? (
+                                    <>
+                                        <span>{challengeQuestion.replace("?", "")}</span>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            className="w-20 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-center text-sm font-semibold text-gray-800 outline-none"
+                                            placeholder="Ans"
+                                            value={challengeAnswer}
+                                            onChange={(e) => setChallengeAnswer(e.target.value)}
+                                            disabled={challengeVerified}
+                                        />
+                                    </>
+                                ) : (
+                                    <span>Calculation unavailable</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyChallenge}
+                                    disabled={challengeLoading || verifyingChallenge || challengeVerified || !challengeAnswer.trim() || !challengeId}
+                                    className="ml-auto rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {verifyingChallenge ? "Verifying..." : "Verify"}
+                                </button>
+                            </div>
+                            {challengeMessage ? (
+                                <p className="mt-1.5 text-sm font-medium text-emerald-600">{challengeMessage}</p>
+                            ) : null}
+                        </div>
 
                         <motion.button
                             type="submit"
-                            className="btn-primary w-full py-3.5 mt-2"
-                            disabled={loading}
+                            className="btn-primary w-full py-3.5 mt-2 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={!canSubmit}
                             whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.98 }}
                         >

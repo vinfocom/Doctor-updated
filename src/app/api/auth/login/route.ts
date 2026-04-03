@@ -4,17 +4,31 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { generateToken } from "@/lib/jwt";
+import { validateLoginChallengeProof } from "@/lib/loginChallenge";
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { email, password } = body;
+        const { email, password, challengeId, challengeVerificationToken } = body;
 
-        if (!email || !password) {
+        if (!email || !password || !challengeId || !challengeVerificationToken) {
             return NextResponse.json(
-                { error: "Email and password are required" },
+                { error: "Email, password, and verified calculation are required" },
                 { status: 400 }
             );
+        }
+
+        const challengeResult = validateLoginChallengeProof(
+            String(challengeId),
+            String(challengeVerificationToken)
+        );
+        if (!challengeResult.ok) {
+            const message =
+                challengeResult.reason === "expired"
+                    ? "Calculation expired. Please generate a new one."
+                    : "Please verify the calculation before logging in.";
+
+            return NextResponse.json({ error: message }, { status: 400 });
         }
 
         // Find user
