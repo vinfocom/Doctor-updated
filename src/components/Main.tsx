@@ -46,16 +46,9 @@ export default function Main() {
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={itemVariants} className="mb-6">
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              Trusted by 10,000+ patients
-            </span>
-          </motion.div>
-
           <motion.h1
             variants={itemVariants}
-            className="text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.05] tracking-tight"
+            className="text-4xl md:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight"
           >
             <span className="text-gray-900">
               Your Health,
@@ -74,17 +67,23 @@ export default function Main() {
 
           <motion.div
             variants={itemVariants}
-            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="mt-10 flex justify-center"
           >
-            <Link href="/login">
+            <Link href="/book-appointment" target="_blank" rel="noopener noreferrer">
               <motion.button
-                className="btn-primary px-8 py-4 text-base rounded-2xl"
+                className="px-14 py-5 text-lg font-semibold rounded-3xl text-white border border-cyan-300/70 bg-gradient-to-r from-cyan-500 via-sky-500 to-indigo-600 shadow-[0_18px_45px_rgba(14,165,233,0.32)] ring-4 ring-cyan-100/80"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Get Started →
+                Book Appointment
               </motion.button>
             </Link>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            className="mt-6 flex justify-center"
+          >
             <Link href="/login">
               <motion.button
                 className="btn-secondary px-8 py-4 text-base rounded-2xl"
@@ -95,6 +94,7 @@ export default function Main() {
               </motion.button>
             </Link>
           </motion.div>
+
         </motion.div>
 
         {/* Floating gradient orbs */}
