@@ -22,13 +22,6 @@ const features = [
   { icon: "🔒", title: "Secure & Private", desc: "Enterprise-grade encryption keeps your health data safe.", gradient: "from-emerald-100 to-green-100" },
 ];
 
-const stats = [
-  { value: "10K+", label: "Patients Served" },
-  { value: "500+", label: "Verified Doctors" },
-  { value: "99%", label: "Satisfaction Rate" },
-  { value: "24/7", label: "Available Support" },
-];
-
 export default function Main() {
   return (
     <div className="relative overflow-hidden">
@@ -110,33 +103,8 @@ export default function Main() {
         />
       </section>
 
-      {/* Stats Bar */}
-      <motion.section
-        className="relative z-10 max-w-5xl mx-auto px-4 -mt-10 mb-20"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.7 }}
-      >
-        <div className="glass-card p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              className="text-center"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 + 0.3, duration: 0.5 }}
-            >
-              <p className="text-2xl md:text-3xl font-bold gradient-text">{stat.value}</p>
-              <p className="text-sm text-gray-500 mt-1 font-medium">{stat.label}</p>
-            </motion.div>
-          ))}
-        </div>
-      </motion.section>
-
       {/* Features Section */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 py-20">
+      <section className="relative z-10 max-w-6xl mx-auto px-4 py-20 md:pt-8">
         <motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 30 }}
