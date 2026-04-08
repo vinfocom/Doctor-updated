@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
             phone: string | null;
             telegram_chat_id?: string | null;
             doctor_id: number | null;
+            booking_id?: number | null;
             admin_id: number;
         } | null = null;
 
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
                     phone: true,
                     telegram_chat_id: true,
                     doctor_id: true,
+                    booking_id: true,
                     admin_id: true,
                 },
             });
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
                     full_name: true,
                     phone: true,
                     doctor_id: true,
+                    booking_id: true,
                     admin_id: true,
                 },
             });

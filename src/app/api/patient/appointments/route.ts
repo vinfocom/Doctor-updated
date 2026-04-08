@@ -21,6 +21,35 @@ function phonesMatch(left: string | null | undefined, right: string | null | und
     return false;
 }
 
+async function syncPatientBookingState(input: {
+    patient_id: number;
+    doctor_id: number;
+    booking_id: number | null;
+    full_name?: string | null;
+}) {
+    const data: {
+        doctor_id: number;
+        booking_id?: number | null;
+        full_name?: string;
+    } = {
+        doctor_id: input.doctor_id,
+    };
+
+    if (input.booking_id != null) {
+        data.booking_id = input.booking_id;
+    }
+
+    const nextName = String(input.full_name || "").trim();
+    if (nextName) {
+        data.full_name = nextName;
+    }
+
+    return prisma.patients.update({
+        where: { patient_id: input.patient_id },
+        data,
+    });
+}
+
 async function getScopedPatientIds(patientId: number) {
     const patient = await prisma.patients.findUnique({
         where: { patient_id: patientId },
@@ -311,13 +340,15 @@ export async function POST(req: Request) {
                         phone: patient.phone || null,
                         full_name: patient_name,
                         profile_type: "OTHER",
-                        booking_id: maxBooking + 1,
+                        booking_id: appointmentBookingId ?? maxBooking + 1,
                     },
                     select: {
                         patient_id: true,
                         admin_id: true,
                         full_name: true,
                         phone: true,
+                        doctor_id: true,
+                        booking_id: true,
                         profile_type: true,
                     },
                 });
@@ -354,6 +385,13 @@ export async function POST(req: Request) {
                 },
             });
 
+            await syncPatientBookingState({
+                patient_id: targetPatient.patient_id,
+                doctor_id,
+                booking_id: appointmentBookingId,
+                full_name: targetProfileType === "SELF" ? patient_name || targetPatient.full_name : targetPatient.full_name,
+            }).catch(() => undefined);
+
             return NextResponse.json({ appointment: rescheduled, rescheduled_existing: true }, { status: 200 });
         }
 
@@ -380,12 +418,12 @@ export async function POST(req: Request) {
             },
         });
 
-        if (targetProfileType === "SELF" && patient_name && patient_name !== (patient.full_name || "")) {
-            await prisma.patients.update({
-                where: { patient_id: patient.patient_id },
-                data: { full_name: patient_name },
-            }).catch(() => undefined);
-        }
+        await syncPatientBookingState({
+            patient_id: targetPatient.patient_id,
+            doctor_id,
+            booking_id: appointmentBookingId,
+            full_name: targetProfileType === "SELF" ? patient_name || targetPatient.full_name : targetPatient.full_name,
+        }).catch(() => undefined);
 
         return NextResponse.json({ appointment, rescheduled_existing: false }, { status: 201 });
     } catch (error: any) {

@@ -44,6 +44,37 @@ export async function GET(req: Request) {
     }
 
     try {
+        if (user.role === "PATIENT") {
+            const patient = await prisma.patients.findUnique({
+                where: { patient_id: user.patientId ?? user.userId },
+                select: { admin_id: true },
+            });
+
+            if (!patient) {
+                return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+            }
+
+            const clinics = await prisma.clinics.findMany({
+                where: { admin_id: patient.admin_id },
+                include: {
+                    schedules: true,
+                    doctor: {
+                        select: {
+                            doctor_id: true,
+                            doctor_name: true,
+                            profile_pic_url: true,
+                            num_clinics: true,
+                            specialization: true,
+                            status: true,
+                        },
+                    },
+                },
+                orderBy: { clinic_name: "asc" },
+            });
+
+            return NextResponse.json({ clinics: await attachClinicQrStorageUrls(clinics) });
+        }
+
         // For doctors, filter to their own clinics
         if (user.role === 'DOCTOR') {
             const doctor = await prisma.doctors.findUnique({

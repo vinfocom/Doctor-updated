@@ -42,6 +42,7 @@ export async function GET(req: Request) {
                 full_name: true,
                 phone: true,
                 doctor_id: true,
+                booking_id: true,
                 admin_id: true,
                 profile_type: true,
                 age: true,

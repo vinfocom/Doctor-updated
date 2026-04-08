@@ -344,6 +344,7 @@ export async function POST(request: Request) {
             }
         });
         const booking_id = existingAppointmentsCount + 1;
+        const patientBookingId = appointmentBookingId ?? booking_id;
 
         const existingPatientsOnPhone = await prisma.patients.findMany({
             where: {
@@ -382,7 +383,7 @@ export async function POST(request: Request) {
                     phone: patient_phone,
                     admin_id: Number(admin_id),
                     doctor_id: Number(doctor_id),
-                    booking_id: booking_id,
+                    booking_id: patientBookingId,
                     profile_type: targetProfileType,
                     full_name: patient_name,
                 }
@@ -393,7 +394,7 @@ export async function POST(request: Request) {
                 where: { patient_id: patient.patient_id },
                 data: {
                     doctor_id: Number(doctor_id),
-                    booking_id: booking_id,
+                    booking_id: patientBookingId,
                 }
             });
         }
@@ -450,6 +451,14 @@ export async function POST(request: Request) {
                 },
             });
 
+            await prisma.patients.update({
+                where: { patient_id: patient.patient_id },
+                data: {
+                    doctor_id: Number(doctor_id),
+                    booking_id: patientBookingId,
+                },
+            }).catch(() => undefined);
+
             return NextResponse.json({
                 ...rescheduled,
                 booking_for,
@@ -493,6 +502,14 @@ export async function POST(request: Request) {
                 ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
             }
         });
+
+        await prisma.patients.update({
+            where: { patient_id: patient.patient_id },
+            data: {
+                doctor_id: Number(doctor_id),
+                booking_id: patientBookingId,
+            },
+        }).catch(() => undefined);
 
         return NextResponse.json({
             ...appointment,

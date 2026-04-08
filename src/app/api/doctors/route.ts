@@ -14,6 +14,23 @@ export async function GET(req: NextRequest) {
         const where: Record<string, unknown> = {};
         if (adminId) where.admin_id = Number(adminId);
 
+        const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+        const cookieToken = req.cookies.get("token")?.value;
+        const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null);
+
+        if (token) {
+            const session = await getSession();
+            if (session?.role === "PATIENT") {
+                const patient = await prisma.patients.findUnique({
+                    where: { patient_id: session.patientId ?? session.userId },
+                    select: { admin_id: true },
+                });
+                if (patient?.admin_id) {
+                    where.admin_id = patient.admin_id;
+                }
+            }
+        }
+
         const doctors = await prisma.doctors.findMany({
             where,
             include: {
