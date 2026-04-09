@@ -59,6 +59,9 @@ const getEffectiveStatus = (doc: Doctor) => {
     return "ACTIVE";
 };
 
+const isPendingApproval = (doc: Doctor) =>
+    doc.status === "INACTIVE" && !toDateInput(doc.active_from) && !toDateInput(doc.active_to);
+
 /* ───────────── Reusable upload component ───────────── */
 function FileUploadBox({
     id, label, fileRef, file, url, uploading, uploadError,
@@ -276,9 +279,9 @@ export default function AdminDoctorsPage() {
         try {
             const effectiveStatus = getEffectiveStatus(statusToggleDoc);
             const newStatus = effectiveStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-            const todayStr = new Date().toISOString().split("T")[0];
-            if (newStatus === "ACTIVE" && !statusToggleActiveTo) {
-                setStatusToggleError("Active To date is required to activate.");
+            const nextActiveFrom = toDateInput(statusToggleDoc.active_from) || new Date().toISOString().split("T")[0];
+            if (newStatus === "ACTIVE" && (!nextActiveFrom || !statusToggleActiveTo)) {
+                setStatusToggleError("Active From and Active To dates are required to activate.");
                 return;
             }
             const res = await fetch("/api/doctors", {
@@ -288,8 +291,8 @@ export default function AdminDoctorsPage() {
                     doctor_id: statusToggleDoc.doctor_id,
                     status: newStatus,
                     ...(newStatus === "ACTIVE"
-                        ? { active_from: todayStr, active_to: statusToggleActiveTo }
-                        : {}),
+                        ? { active_from: nextActiveFrom, active_to: statusToggleActiveTo }
+                        : { active_to: new Date().toISOString().split("T")[0] }),
                 }),
             });
             if (res.ok) {
@@ -338,18 +341,23 @@ export default function AdminDoctorsPage() {
         setEditSubmitting(true);
         setEditError("");
         try {
+            const payload: Record<string, unknown> = {
+                doctor_id: editDoc.doctor_id,
+                ...editForm,
+                document_url: editDocUrl || null,
+                profile_pic_url: editProfilePicUrl || null,
+                whatsapp_numbers: editWaNums.filter(n => n.trim()).map(n => ({ whatsapp_number: n.trim() })),
+            };
+
+            if (user?.role === "SUPER_ADMIN") {
+                payload.active_from = editForm.active_from || null;
+                payload.active_to = editForm.active_to || null;
+            }
+
             const res = await fetch("/api/doctors", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    doctor_id: editDoc.doctor_id,
-                    ...editForm,
-                    document_url: editDocUrl || null,
-                    profile_pic_url: editProfilePicUrl || null,
-                    active_from: editForm.active_from || null,
-                    active_to: editForm.active_to || null,
-                    whatsapp_numbers: editWaNums.filter(n => n.trim()).map(n => ({ whatsapp_number: n.trim() })),
-                }),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             if (res.ok) {
@@ -506,11 +514,12 @@ export default function AdminDoctorsPage() {
                                                 <div className="flex items-center gap-2">
                                                     {(() => {
                                                         const effectiveStatus = getEffectiveStatus(doc);
+                                                        const pendingApproval = isPendingApproval(doc);
                                                         return (
                                                             <>
-                                                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
-                                                                <span className={`text-xs font-semibold ${effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
-                                                                    {effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
+                                                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${pendingApproval ? "bg-amber-500" : effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
+                                                                <span className={`text-xs font-semibold ${pendingApproval ? "text-amber-600" : effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
+                                                                    {pendingApproval ? "Needs Approval" : effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
                                                                 </span>
                                                             </>
                                                         );
@@ -544,15 +553,17 @@ export default function AdminDoctorsPage() {
                                                     </motion.button>
                                                     <motion.button
                                                         onClick={() => {
+                                                            if (user?.role !== "SUPER_ADMIN") return;
                                                             setStatusToggleDoc({ ...doc, status: getEffectiveStatus(doc) });
                                                             setStatusToggleActiveTo(toDateInput(doc.active_to));
                                                             setStatusToggleError("");
                                                         }}
+                                                        disabled={user?.role !== "SUPER_ADMIN"}
                                                         className={`p-2 rounded-lg transition-colors ${getEffectiveStatus(doc) === "INACTIVE"
                                                             ? "bg-green-50 text-green-600 hover:bg-green-100"
                                                             : "bg-orange-50 text-orange-600 hover:bg-orange-100"
-                                                            }`}
-                                                        title={getEffectiveStatus(doc) === "INACTIVE" ? "Activate" : "Deactivate"}
+                                                            } ${user?.role !== "SUPER_ADMIN" ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                        title={user?.role !== "SUPER_ADMIN" ? "Only super admin can approve or change status" : getEffectiveStatus(doc) === "INACTIVE" ? "Approve / Activate" : "Deactivate"}
                                                         whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
                                                     >
                                                         <Power size={15} />
@@ -765,10 +776,10 @@ export default function AdminDoctorsPage() {
                                     <Power size={26} className={getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "text-green-500" : "text-orange-500"} />
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                    {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "Activate" : "Deactivate"} Doctor?
+                                    {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "Approve Doctor?" : "Activate Doctor?") : "Deactivate Doctor?"}
                                 </h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Are you sure you want to {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "activate" : "deactivate"}{" "}
+                                    Are you sure you want to {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "approve" : "activate") : "deactivate"}{" "}
                                     <span className="font-semibold text-gray-700">Dr. {statusToggleDoc.doctor_name}</span>?
                                     {getEffectiveStatus(statusToggleDoc) !== "INACTIVE" && (
                                         <span className="block mt-1 text-orange-500 font-medium">The doctor will not be able to log in while deactivated.</span>
@@ -776,6 +787,13 @@ export default function AdminDoctorsPage() {
                                 </p>
                                 {getEffectiveStatus(statusToggleDoc) === "INACTIVE" && (
                                     <div className="mb-4 text-left">
+                                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Active From</label>
+                                        <input
+                                            type="date"
+                                            value={toDateInput(statusToggleDoc.active_from) || new Date().toISOString().split("T")[0]}
+                                            onChange={(e) => setStatusToggleDoc({ ...statusToggleDoc, active_from: e.target.value })}
+                                            className="input-field mt-1 mb-3"
+                                        />
                                         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Active To</label>
                                         <input
                                             type="date"
@@ -794,7 +812,7 @@ export default function AdminDoctorsPage() {
                                             : "bg-orange-500 hover:bg-orange-600"
                                             }`}
                                     >
-                                        {statusToggling ? "Processing…" : statusToggleDoc.status === "INACTIVE" ? "Yes, Activate" : "Yes, Deactivate"}
+                                        {statusToggling ? "Processing…" : getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "Yes, Approve" : "Yes, Activate") : "Yes, Deactivate"}
                                     </button>
                                 </div>
                             </motion.div>

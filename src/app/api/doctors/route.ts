@@ -160,6 +160,10 @@ export async function PATCH(req: NextRequest) {
             email, password, // newly added user credentials
         } = body;
 
+        if ((status !== undefined || active_from !== undefined || active_to !== undefined) && session.role !== "SUPER_ADMIN") {
+            return NextResponse.json({ error: "Only super admin can approve, activate, or deactivate doctors" }, { status: 403 });
+        }
+
         if (!doctor_id) {
             return NextResponse.json({ error: "doctor_id required" }, { status: 400 });
         }

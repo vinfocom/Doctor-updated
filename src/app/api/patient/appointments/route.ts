@@ -256,10 +256,26 @@ export async function POST(req: Request) {
 
         const doctor = await prisma.doctors.findUnique({
             where: { doctor_id },
-            select: { doctor_id: true, admin_id: true },
+            select: { doctor_id: true, admin_id: true, status: true, active_from: true, active_to: true },
         });
         if (!doctor || doctor.admin_id !== patient.admin_id) {
             return NextResponse.json({ error: "Doctor not available for this patient" }, { status: 403 });
+        }
+        const todayStr = new Date().toISOString().split("T")[0];
+        if (doctor.status !== "ACTIVE") {
+            return NextResponse.json({ error: "Doctor is pending approval or inactive" }, { status: 403 });
+        }
+        if (doctor.active_from) {
+            const fromStr = new Date(doctor.active_from).toISOString().split("T")[0];
+            if (fromStr > todayStr) {
+                return NextResponse.json({ error: "Doctor is not yet available for booking" }, { status: 403 });
+            }
+        }
+        if (doctor.active_to) {
+            const toStr = new Date(doctor.active_to).toISOString().split("T")[0];
+            if (toStr < todayStr) {
+                return NextResponse.json({ error: "Doctor is no longer available for booking" }, { status: 403 });
+            }
         }
 
         const clinic = await prisma.clinics.findUnique({

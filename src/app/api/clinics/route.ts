@@ -3,6 +3,11 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/jwt";
 import { cookies } from "next/headers";
 
+function getTodayDate() {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 async function attachClinicQrStorageUrls<T extends { clinic_id: number }>(clinics: T[]) {
     if (clinics.length === 0) return clinics;
 
@@ -54,8 +59,20 @@ export async function GET(req: Request) {
                 return NextResponse.json({ error: "Patient not found" }, { status: 404 });
             }
 
+            const today = getTodayDate();
             const clinics = await prisma.clinics.findMany({
-                where: { admin_id: patient.admin_id },
+                where: {
+                    admin_id: patient.admin_id,
+                    doctor: {
+                        is: {
+                            status: "ACTIVE",
+                            AND: [
+                                { OR: [{ active_from: null }, { active_from: { lte: today } }] },
+                                { OR: [{ active_to: null }, { active_to: { gte: today } }] },
+                            ],
+                        },
+                    },
+                },
                 include: {
                     schedules: true,
                     doctor: {
