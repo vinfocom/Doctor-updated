@@ -19,6 +19,12 @@ function sanitizePhone(value: unknown) {
     return String(value || "").replace(/[^\d+]/g, "").trim();
 }
 
+function normalizeClinicCount(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.floor(parsed));
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -28,6 +34,7 @@ export async function POST(req: NextRequest) {
         const confirmPassword = String(body?.confirmPassword || "");
         const doctor_name = normalizeText(body?.doctor_name);
         const phone = sanitizePhone(body?.phone);
+        const num_clinics = normalizeClinicCount(body?.num_clinics);
         const whatsapp_number = sanitizePhone(body?.whatsapp_number);
         const specialization = normalizeText(body?.specialization);
         const registration_no = normalizeText(body?.registration_no);
@@ -149,7 +156,7 @@ export async function POST(req: NextRequest) {
                     status: "INACTIVE",
                     username: email.split("@")[0] || `doctor_${user.user_id}`,
                     chat_id: null,
-                    num_clinics: 0,
+                    num_clinics,
                 },
                 select: {
                     doctor_id: true,
