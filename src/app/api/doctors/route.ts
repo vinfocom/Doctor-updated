@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const adminId = searchParams.get("adminId");
+        const today = new Date();
 
         const where: Record<string, unknown> = {};
         if (adminId) where.admin_id = Number(adminId);
@@ -28,6 +29,21 @@ export async function GET(req: NextRequest) {
                 if (patient?.admin_id) {
                     where.admin_id = patient.admin_id;
                 }
+                where.status = "ACTIVE";
+                where.AND = [
+                    {
+                        OR: [
+                            { active_from: null },
+                            { active_from: { lte: today } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { active_to: null },
+                            { active_to: { gte: today } },
+                        ],
+                    },
+                ];
             }
         }
 

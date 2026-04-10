@@ -133,8 +133,6 @@ export async function POST(req: NextRequest) {
                 },
             });
 
-            const resolvedChatId = BigInt(Math.floor(Date.now() / 1000) + user.user_id);
-
             const doctor = await tx.doctors.create({
                 data: {
                     admin_id: admin.admin_id,
@@ -150,7 +148,7 @@ export async function POST(req: NextRequest) {
                     pan_number,
                     status: "INACTIVE",
                     username: email.split("@")[0] || `doctor_${user.user_id}`,
-                    chat_id: resolvedChatId,
+                    chat_id: null,
                     num_clinics: 0,
                 },
                 select: {
@@ -175,7 +173,7 @@ export async function POST(req: NextRequest) {
                     doctor_id: doctor.doctor_id,
                     whatsapp_number: number,
                     is_primary: index === 0,
-                    chat_id: resolvedChatId,
+                    chat_id: null,
                 })),
             });
 
