@@ -76,7 +76,7 @@ function FileUploadBox({
     return (
         <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
-                {label} <span className="text-gray-400 text-xs font-normal">(PDF, JPG, PNG — max 5 MB)</span>
+                {label} <span className="text-gray-400 text-xs font-normal">(PDF, JPG, PNG, WEBP - max 5 MB)</span>
             </label>
             <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={onFileChange} className="hidden" id={id} />
             {!file && !url ? (
@@ -939,6 +939,19 @@ export default function AdminDoctorsPage() {
                                                 onFileChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, setEditDocFile, setEditDocUrl, setEditUploading, setEditUploadError); }}
                                                 onClear={() => { setEditDocFile(null); setEditDocUrl(""); if (editFileRef.current) editFileRef.current.value = ""; }}
                                             />
+                                            {editDocUrl && (
+                                                <div className="mt-2 flex justify-end">
+                                                    <a
+                                                        href={editDocUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                                                    >
+                                                        <FileText size={14} />
+                                                        View Uploaded Document
+                                                    </a>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1114,3 +1127,4 @@ export default function AdminDoctorsPage() {
         </div>
     );
 }
+

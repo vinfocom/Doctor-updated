@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         const specialization = normalizeText(body?.specialization);
         const registration_no = normalizeText(body?.registration_no);
         const education = normalizeText(body?.education);
+        const document_url = normalizeText(body?.document_url);
         const address = normalizeText(body?.address);
         const gst_number = normalizeText(body?.gst_number);
         const pan_number = normalizeText(body?.pan_number);
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
             !specialization ||
             !registration_no ||
             !education ||
+            !document_url ||
             !address ||
             !challengeId ||
             !challengeVerificationToken
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 {
                     error:
-                        "Email, password, confirm password, doctor name, phone, WhatsApp number, specialization, registration number, education, address, and verified calculation are required",
+                        "Email, password, confirm password, doctor name, phone, WhatsApp number, specialization, registration number, education, degree document, address, and verified calculation are required",
                 },
                 { status: 400 }
             );
@@ -150,6 +152,7 @@ export async function POST(req: NextRequest) {
                     specialization,
                     registration_no,
                     education,
+                    document_url,
                     address,
                     gst_number,
                     pan_number,
@@ -168,6 +171,7 @@ export async function POST(req: NextRequest) {
                     specialization: true,
                     registration_no: true,
                     education: true,
+                    document_url: true,
                     address: true,
                     gst_number: true,
                     pan_number: true,
