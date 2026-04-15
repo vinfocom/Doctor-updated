@@ -164,10 +164,12 @@ function FocusCard({
     appointment: QueueCard | null;
     compact?: boolean;
 }) {
+    const numberColor = label.toLowerCase() === "next" ? "text-orange-300" : "text-emerald-400";
+
     return (
         <div className={`flex min-h-0 flex-col items-center justify-center text-center ${compact ? "h-full gap-[clamp(0.35rem,0.8vh,0.75rem)] px-2 py-1" : "min-h-[240px] gap-4 px-4 py-4"}`}>
             <p className={`${compact ? "text-[clamp(1rem,1.8vw,1.35rem)] tracking-[0.22em]" : "text-[1.3rem] tracking-[0.28em]"} font-bold uppercase text-slate-500`}>{label}</p>
-            <div className={`${compact ? "text-[clamp(3.2rem,10vmin,7rem)]" : "text-[clamp(5rem,12vw,9rem)]"} font-black leading-none text-indigo-600`}>
+            <div className={`${compact ? "text-[clamp(3.2rem,10vmin,7rem)]" : "text-[clamp(5rem,12vw,9rem)]"} font-black leading-none ${numberColor}`}>
                 {appointment?.queue_number ?? "--"}
             </div>
             <p className={`max-w-full truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.95rem,2vmin,1.5rem)]" : "text-[clamp(1.15rem,2.5vw,2rem)]"}`}>
