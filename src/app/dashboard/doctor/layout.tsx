@@ -1,4 +1,3 @@
-
 import { getSession } from "@/lib/auth";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import prisma from "@/lib/prisma";

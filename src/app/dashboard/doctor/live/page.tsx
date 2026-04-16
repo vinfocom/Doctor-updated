@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AlertCircle, Loader2, Maximize, Minimize } from "lucide-react";
+import { Loader2, Maximize, Minimize } from "lucide-react";
 import { convertTo12Hour, formatTime } from "@/lib/timeUtils";
 
 type ScheduleOption = {
@@ -36,6 +36,7 @@ type LiveResponse = {
     selected_clinic_id: number | null;
     today_label: string;
     now_label: string;
+    schedule_label?: string;
     current: QueueCard | null;
     next: QueueCard | null;
     missed: QueueCard[];
@@ -57,6 +58,7 @@ const EMPTY_STATE: LiveResponse = {
     selected_clinic_id: null,
     today_label: "",
     now_label: "",
+    schedule_label: "",
     current: null,
     next: null,
     missed: [],
@@ -64,7 +66,6 @@ const EMPTY_STATE: LiveResponse = {
     total_today: 0,
 };
 
-const PAGE_SIZE = 6;
 const ROTATE_INTERVAL_MS = 3000;
 const TICKER_SEPARATOR = " \u2022 ";
 const TICKER_MESSAGE =
@@ -148,10 +149,10 @@ function splitIntoPages<T>(items: T[], pageSize: number) {
     return pages.length > 0 ? pages : [[]];
 }
 
-function splitColumns<T>(items: T[]) {
+function splitColumns<T>(items: T[], rowsPerColumn: number) {
     return {
-        left: items.slice(0, 3),
-        right: items.slice(3, 6),
+        left: items.slice(0, rowsPerColumn),
+        right: items.slice(rowsPerColumn, rowsPerColumn * 2),
     };
 }
 
@@ -167,12 +168,12 @@ function FocusCard({
     const numberColor = label.toLowerCase() === "next" ? "text-orange-300" : "text-emerald-400";
 
     return (
-        <div className={`flex min-h-0 flex-col items-center justify-center text-center ${compact ? "h-full gap-[clamp(0.35rem,0.8vh,0.75rem)] px-2 py-1" : "min-h-[240px] gap-4 px-4 py-4"}`}>
-            <p className={`${compact ? "text-[clamp(1rem,1.8vw,1.35rem)] tracking-[0.22em]" : "text-[1.3rem] tracking-[0.28em]"} font-bold uppercase text-slate-500`}>{label}</p>
-            <div className={`${compact ? "text-[clamp(3.2rem,10vmin,7rem)]" : "text-[clamp(5rem,12vw,9rem)]"} font-black leading-none ${numberColor}`}>
+        <div className={`flex min-h-0 flex-col items-center justify-center text-center ${compact ? "h-full gap-[clamp(0.35rem,0.8vh,0.75rem)] px-2 py-1" : "min-h-[200px] gap-3 px-4 py-5 sm:min-h-[240px] sm:gap-4"}`}>
+            <p className={`${compact ? "text-[clamp(1rem,1.8vw,1.35rem)] tracking-[0.22em]" : "text-[1rem] tracking-[0.22em] sm:text-[1.15rem] lg:text-[1.3rem] lg:tracking-[0.28em]"} font-bold uppercase text-slate-500`}>{label}</p>
+            <div className={`${compact ? "text-[clamp(3.2rem,10vmin,7rem)]" : "text-[clamp(3.6rem,16vw,6.5rem)] sm:text-[clamp(4.5rem,12vw,8rem)]"} font-black leading-none ${numberColor}`}>
                 {appointment?.queue_number ?? "--"}
             </div>
-            <p className={`max-w-full truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.95rem,2vmin,1.5rem)]" : "text-[clamp(1.15rem,2.5vw,2rem)]"}`}>
+            <p className={`max-w-full truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.95rem,2vmin,1.5rem)]" : "text-[1rem] sm:text-[1.15rem] lg:text-[clamp(1.15rem,2.5vw,2rem)]"}`}>
                 {appointment?.patient_name || "No Patient"}
             </p>
         </div>
@@ -188,7 +189,7 @@ function RotatingAppointmentGrid({
     items: QueueCard[];
     compact?: boolean;
 }) {
-    const pages = useMemo(() => splitIntoPages(items, PAGE_SIZE), [items]);
+    const pages = useMemo(() => splitIntoPages(items, 8), [items]);
     const [pageIndex, setPageIndex] = useState(0);
     const [fading, setFading] = useState(false);
 
@@ -206,34 +207,47 @@ function RotatingAppointmentGrid({
         return () => window.clearInterval(interval);
     }, [pages.length]);
 
-    const normalizedPageIndex = pageIndex % pages.length;
+    const normalizedPageIndex = pageIndex >= pages.length ? 0 : pageIndex % pages.length;
     const activePage = pages[normalizedPageIndex] || [];
-    const columns = splitColumns(activePage);
+    const columns = splitColumns(activePage, 4);
     const isMissedSection = title.toLowerCase() === "missed";
     const sectionTone = isMissedSection
         ? "border-sky-200 bg-sky-50/65 text-sky-600"
         : "border-indigo-200 bg-indigo-50/55 text-indigo-500";
+    const appointmentNumberColor = isMissedSection ? "text-red-500" : "text-indigo-600";
 
-    const numberColumnClass = compact ? "grid-cols-[clamp(3.5rem,8vw,5.5rem)_minmax(0,1fr)]" : "grid-cols-[88px_minmax(0,1fr)]";
+    const numberColumnClass = compact ? "grid-cols-[clamp(3.5rem,8vw,5.5rem)_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)] sm:grid-cols-[88px_minmax(0,1fr)]";
+    const rowCardClass = compact
+        ? "min-h-[clamp(1.5rem,3vh,2.1rem)] gap-[clamp(0.2rem,0.45vw,0.35rem)] px-[clamp(0.38rem,0.7vw,0.55rem)] py-[clamp(0.08rem,0.2vh,0.18rem)]"
+        : "min-h-[48px] gap-2 px-2.5 sm:min-h-[56px] sm:px-3";
+    const sectionPaddingClass = compact ? "px-[clamp(0.75rem,1.6vmin,1.05rem)] pb-[clamp(0.4rem,0.9vmin,0.65rem)] pt-[clamp(0.45rem,1vmin,0.7rem)]" : "p-3 sm:p-4 lg:p-5";
+    const sectionHeaderClass = compact ? "mb-[clamp(0.2rem,0.45vh,0.35rem)]" : "mb-4";
+    const sectionTitleClass = compact ? "text-[clamp(0.78rem,1.45vmin,1rem)] tracking-[0.18em]" : "text-[clamp(0.85rem,1.8vmin,1.15rem)] tracking-[0.24em]";
+    const columnHeaderClass = compact
+        ? "px-2 pb-0 text-[clamp(0.52rem,0.9vmin,0.72rem)] tracking-[0.11em]"
+        : "px-2.5 pb-1.5 sm:px-3 sm:pb-2";
 
     const renderColumn = (columnItems: QueueCard[], columnKey: string) => (
-        <div className={`grid min-h-0 grid-rows-[auto_repeat(3,minmax(0,1fr))] ${compact ? "gap-[clamp(0.25rem,0.7vh,0.5rem)]" : "gap-2"}`}>
-            <div className={`grid ${numberColumnClass} text-[clamp(0.62rem,1.15vmin,0.9rem)] font-semibold uppercase tracking-[0.16em] text-slate-500 ${compact ? "px-2 pb-0.5" : "px-3 pb-2"}`}>
+        <div
+                className={`grid min-h-0 ${compact ? "gap-[clamp(0.18rem,0.45vh,0.32rem)]" : "gap-2"}`}
+            style={{ gridTemplateRows: "auto repeat(4, minmax(0, 1fr))" }}
+        >
+            <div className={`grid ${numberColumnClass} font-semibold uppercase text-slate-500 ${compact ? columnHeaderClass : `text-[clamp(0.62rem,1.15vmin,0.9rem)] tracking-[0.16em] ${columnHeaderClass}`}`}>
                 <span>No.</span>
                 <span>Patient Name</span>
             </div>
-            {Array.from({ length: 3 }).map((_, index) => {
+            {Array.from({ length: 4 }).map((_, index) => {
                 const appointment = columnItems[index];
                 return (
                     <div
                         key={appointment ? appointment.appointment_id : `${title}-${columnKey}-${index}`}
-                        className={`grid min-h-0 ${numberColumnClass} items-center rounded-[clamp(1rem,2vmin,1.5rem)] bg-white/75 ${compact ? "gap-2 px-2 py-1" : "min-h-[68px] gap-3 px-3"}`}
+                        className={`grid min-h-0 ${numberColumnClass} items-center rounded-[clamp(1rem,2vmin,1.5rem)] bg-white/75 ${rowCardClass}`}
                     >
                         {appointment ? (
                             <>
-                                <div className={`${compact ? "text-[clamp(1.25rem,3vmin,2rem)]" : "text-3xl"} font-black text-indigo-600`}>{appointment.queue_number}</div>
+                                <div className={`${compact ? "text-[clamp(0.82rem,1.55vmin,1.1rem)] leading-none" : "text-xl sm:text-2xl"} font-black ${appointmentNumberColor}`}>{appointment.queue_number}</div>
                                 <div className="min-w-0">
-                                    <p className={`truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.78rem,1.7vmin,1.05rem)]" : "text-[1.15rem]"}`}>
+                                    <p className={`truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.76rem,1.16vmin,0.94rem)] leading-tight" : "text-[1rem] sm:text-[1.08rem] lg:text-[1.18rem]"}`}>
                                         {appointment.patient_name}
                                     </p>
                                 </div>
@@ -248,18 +262,18 @@ function RotatingAppointmentGrid({
     );
 
     return (
-        <section className={`flex min-h-0 flex-col overflow-hidden rounded-[clamp(1.35rem,3vmin,2.25rem)] border ${sectionTone} ${compact ? "p-[clamp(0.65rem,1.4vmin,1rem)]" : "p-5"}`}>
-            <div className={`flex shrink-0 items-center justify-between gap-3 ${compact ? "mb-[clamp(0.35rem,0.9vh,0.75rem)]" : "mb-4"}`}>
-                <h2 className="text-[clamp(0.85rem,1.8vmin,1.15rem)] font-black uppercase tracking-[0.24em]">{title}</h2>
+        <section className={`flex min-h-0 flex-col overflow-hidden rounded-[clamp(1.35rem,3vmin,2.25rem)] border ${sectionTone} ${sectionPaddingClass}`}>
+            <div className={`flex shrink-0 items-center justify-between gap-3 ${sectionHeaderClass}`}>
+                <h2 className={`${sectionTitleClass} font-black uppercase`}>{title}</h2>
                 {pages.length > 1 ? (
-                    <div className="text-sm font-medium text-slate-400">
+                    <div className={compact ? "text-[clamp(0.62rem,1vmin,0.8rem)] font-medium text-slate-400" : "text-sm font-medium text-slate-400"}>
                         {normalizedPageIndex + 1}/{pages.length}
                     </div>
                 ) : null}
             </div>
 
             <div
-                className={`grid min-h-0 flex-1 grid-cols-2 transition-opacity duration-300 ${compact ? "gap-[clamp(0.5rem,1.3vmin,1rem)]" : "gap-4"} ${fading ? "opacity-0" : "opacity-100"}`}
+                className={`grid min-h-0 flex-1 transition-opacity duration-300 ${compact ? "grid-cols-2 gap-[clamp(0.45rem,1.05vmin,0.8rem)]" : "grid-cols-1 gap-3 md:grid-cols-2 md:gap-4"} ${fading ? "opacity-0" : "opacity-100"}`}
             >
                 {renderColumn(columns.left, "left")}
                 {renderColumn(columns.right, "right")}
@@ -399,7 +413,10 @@ export default function LiveAppointmentsPage() {
         [clinics, selectedClinicId]
     );
 
-    const scheduleLabel = useMemo(() => buildScheduleLabel(selectedClinic, new Date()), [selectedClinic]);
+    const scheduleLabel = useMemo(
+        () => liveData.schedule_label || buildScheduleLabel(selectedClinic, new Date()),
+        [liveData.schedule_label, selectedClinic]
+    );
 
     const toggleFullscreen = async () => {
         try {
@@ -425,27 +442,15 @@ export default function LiveAppointmentsPage() {
     return (
         <div
             ref={fullscreenRef}
-            className={`bg-[#f4f7fb] text-slate-900 ${isFullscreen ? "h-[100dvh] overflow-hidden p-[clamp(2.5rem,4.25vw,5rem)]" : "min-h-screen p-8 md:p-10"}`}
+            className={`bg-[#f4f7fb] text-slate-900 ${isFullscreen ? "h-[100dvh] overflow-hidden p-[clamp(2.5rem,4.25vw,5rem)]" : "min-h-screen p-4 sm:p-6 md:p-8 lg:p-10"}`}
         >
             <div className={`mx-auto ${isFullscreen ? "flex h-full max-w-none flex-col" : "max-w-7xl"}`}>
-                {error ? (
-                    <div className="mb-4 rounded-3xl bg-red-50 px-5 py-4 text-red-700">
-                        <div className="flex items-start gap-3">
-                            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-                            <div>
-                                <p className="font-semibold">Unable to show the live queue.</p>
-                                <p className="mt-1 text-sm">{error}</p>
-                            </div>
-                        </div>
-                    </div>
-                ) : null}
-
-                <div className={`flex items-center justify-end gap-3 ${isFullscreen ? "mb-2" : "mb-4"}`}>
+                <div className={`flex gap-3 ${isFullscreen ? "mb-2 items-center justify-end" : "mb-4 flex-col items-stretch sm:flex-row sm:items-center sm:justify-end"}`}>
                     {!isFullscreen && me?.role === "DOCTOR" && clinics.length > 1 ? (
                         <select
                             value={selectedClinicId ?? ""}
                             onChange={(event) => setSelectedClinicId(event.target.value ? Number(event.target.value) : null)}
-                            className="rounded-2xl bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none"
+                            className="w-full rounded-2xl bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none sm:w-auto"
                         >
                             {clinics.map((clinic) => (
                                 <option key={clinic.clinic_id} value={clinic.clinic_id}>
@@ -457,15 +462,19 @@ export default function LiveAppointmentsPage() {
                     <button
                         type="button"
                         onClick={toggleFullscreen}
-                        className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+                        className={`inline-flex items-center justify-center rounded-full font-semibold text-white sm:self-auto ${
+                            isFullscreen
+                                ? "bg-indigo-400 gap-1.5 px-3 py-1.5 text-xs"
+                                : "bg-indigo-600 gap-2 px-4 py-2 text-sm"
+                        }`}
                     >
                         {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
                         {isFullscreen ? "Exit Full Screen" : "Full Screen"}
                     </button>
                 </div>
 
-                <div className={`grid ${isFullscreen ? "min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,0.76fr)_minmax(0,1.28fr)_auto] gap-[clamp(0.45rem,1.1vh,0.8rem)]" : "gap-5"}`}>
-                    <section className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-[34px] bg-white ${isFullscreen ? "px-[clamp(1rem,2vw,1.5rem)] py-[clamp(0.7rem,1.4vh,1.1rem)]" : "px-6 py-5"}`}>
+                <div className={`grid ${isFullscreen ? "min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,0.76fr)_minmax(0,1.28fr)_auto] gap-[clamp(0.45rem,1.1vh,0.8rem)]" : "gap-4 sm:gap-5"}`}>
+                    <section className={`grid items-center rounded-[34px] bg-white ${isFullscreen ? "grid-cols-[minmax(0,1fr)_auto] gap-4 px-[clamp(1rem,2vw,1.5rem)] py-[clamp(0.7rem,1.4vh,1.1rem)]" : "grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-5"}`}>
                         <div className="flex min-w-0 items-center gap-4">
                             <Image
                                 src="/dapto-logo.png"
@@ -480,23 +489,23 @@ export default function LiveAppointmentsPage() {
                                 <div className={`${isFullscreen ? "mt-0.5 text-[clamp(0.75rem,1.45vmin,1rem)]" : "mt-1 text-[1rem]"} truncate font-medium text-slate-500`}>{scheduleLabel}</div>
                             </div>
                         </div>
-                        <div className={`${isFullscreen ? "text-[clamp(1.15rem,2.7vmin,1.9rem)]" : "text-[1.9rem]"} font-bold text-slate-900`}>{clock}</div>
+                        <div className={`${isFullscreen ? "text-[clamp(1.15rem,2.7vmin,1.9rem)]" : "text-[1.3rem] sm:text-[1.6rem] lg:text-[1.9rem]"} font-bold text-slate-900 sm:text-right`}>{clock}</div>
                     </section>
 
-                    <section className={`grid grid-cols-2 items-center gap-6 ${isFullscreen ? "px-[clamp(0.5rem,1.2vw,0.75rem)] py-0" : "px-3 py-1"}`}>
+                    <section className={`grid items-center ${isFullscreen ? "grid-cols-2 gap-6 px-[clamp(0.5rem,1.2vw,0.75rem)] py-0" : "grid-cols-1 gap-2 px-1 py-1 md:grid-cols-2 md:gap-6 md:px-3"}`}>
                         <div className="min-w-0">
-                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
+                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
                                 {formatDoctorName(liveData.doctor_name || selectedClinic?.doctor?.doctor_name || me?.name || "Doctor")}
                             </p>
                         </div>
-                        <div className="min-w-0 text-right">
-                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
+                        <div className="min-w-0 md:text-right">
+                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
                                 {liveData.clinic_name || selectedClinic?.clinic_name || "Clinic"}
                             </p>
                         </div>
                     </section>
 
-                    <section className={`grid min-h-0 grid-cols-2 rounded-[clamp(1.5rem,3vmin,2.375rem)] bg-white ${isFullscreen ? "gap-[clamp(0.5rem,1.5vw,1rem)] px-[clamp(0.75rem,1.7vw,1.25rem)] py-[clamp(0.4rem,1vh,0.75rem)]" : "gap-8 px-6 py-4"}`}>
+                    <section className={`grid min-h-0 rounded-[clamp(1.5rem,3vmin,2.375rem)] bg-white ${isFullscreen ? "grid-cols-2 gap-[clamp(0.5rem,1.5vw,1rem)] px-[clamp(0.75rem,1.7vw,1.25rem)] py-[clamp(0.4rem,1vh,0.75rem)]" : "grid-cols-1 gap-4 px-4 py-4 sm:px-5 md:grid-cols-2 md:gap-8 md:px-6"}`}>
                         <FocusCard label="Current" appointment={liveData.current} compact={isFullscreen} />
                         <FocusCard label="Next" appointment={liveData.next} compact={isFullscreen} />
                     </section>
@@ -506,8 +515,8 @@ export default function LiveAppointmentsPage() {
                         <RotatingAppointmentGrid title="Missed" items={liveData.missed} compact={isFullscreen} />
                     </div>
 
-                    <section className={`overflow-hidden rounded-full bg-white/80 text-indigo-700 ${isFullscreen ? "px-4 py-[clamp(0.35rem,0.9vh,0.6rem)]" : "px-5 py-3"}`}>
-                        <div className="flex w-max animate-[liveTicker_34s_linear_infinite] whitespace-nowrap text-[clamp(0.9rem,1.45vmin,1.1rem)] font-medium tracking-[0.04em]">
+                    <section className={`overflow-hidden rounded-full bg-white/80 text-indigo-700 ${isFullscreen ? "px-4 py-[clamp(0.35rem,0.9vh,0.6rem)]" : "px-4 py-2.5 sm:px-5 sm:py-3"}`}>
+                        <div className="flex w-max animate-[liveTicker_34s_linear_infinite] whitespace-nowrap text-[0.82rem] font-medium tracking-[0.04em] sm:text-[0.95rem] lg:text-[1.05rem]">
                             <span className="pr-24">{TICKER_MESSAGE}</span>
                             <span className="pr-24" aria-hidden="true">
                                 {TICKER_MESSAGE}

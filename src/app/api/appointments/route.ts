@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { Prisma } from '@/generated/prisma/client';
 import { parseISTDate, parseISTTimeToUTCDate } from '@/lib/appointmentDateTime';
 import { attachBookingIds, computeBookingIdForAppointment } from '@/lib/bookingId';
+import { getChannelFromRequest } from '@/lib/request-auth';
 
 const VALID_APPOINTMENT_STATUSES = new Set([
     'BOOKED',
@@ -246,6 +247,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
+        const channel = getChannelFromRequest(request);
         let doctor_id = body.doctor_id;
         const clinic_id = body.clinic_id;
         let admin_id = body.admin_id;
@@ -445,6 +447,7 @@ export async function POST(request: Request) {
                     start_time: startTimeObj,
                     end_time: endTimeObj,
                     status: "BOOKED",
+                    channel,
                     booked_for: booking_for,
                     rescheduled_by: String(sessionUser?.role || "DOCTOR"),
                     ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
@@ -483,6 +486,7 @@ export async function POST(request: Request) {
         const appointment = await prisma.appointment.create({
             data: {
                 status: 'BOOKED',
+                channel,
                 booked_for: booking_for,
                 appointment_date: dateObj,
                 start_time: startTimeObj,

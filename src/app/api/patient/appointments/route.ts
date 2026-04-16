@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionFromRequest } from "@/lib/request-auth";
+import { getChannelFromRequest, getSessionFromRequest } from "@/lib/request-auth";
 import { addMinutesToTimeString, getISTDayOfWeek, parseISTDate, parseISTTimeToUTCDate } from "@/lib/appointmentDateTime";
 import { attachBookingIds, computeBookingIdForAppointment } from "@/lib/bookingId";
 
@@ -229,6 +229,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         const session = await getSessionFromRequest(req);
+        const channel = getChannelFromRequest(req);
         if (!session || session.role !== "PATIENT") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -395,6 +396,7 @@ export async function POST(req: Request) {
                     start_time: startTimeObj,
                     end_time: endTimeObj,
                     status: "BOOKED",
+                    channel,
                     booked_for: booking_for,
                     rescheduled_by: "PATIENT",
                     ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
@@ -417,6 +419,7 @@ export async function POST(req: Request) {
                 start_time: startTimeObj,
                 end_time: endTimeObj,
                 status: "BOOKED",
+                channel,
                 booked_for: booking_for,
                 patient: {
                     connect: { patient_id: targetPatient.patient_id },
