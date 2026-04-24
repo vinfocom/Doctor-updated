@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { generateToken } from "@/lib/jwt";
 import { validateLoginChallengeProof } from "@/lib/loginChallenge";
@@ -127,14 +128,30 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const full_name = String(body?.full_name || "").trim();
         const phone = String(body?.phone || "").trim();
+        const password = String(body?.password || "").trim();
+        const confirmPassword = String(body?.confirmPassword || "").trim();
         const gender = body?.gender == null ? null : String(body.gender).trim() || null;
         const ageValue = body?.age;
         const challengeId = String(body?.challengeId || "").trim();
         const challengeVerificationToken = String(body?.challengeVerificationToken || "").trim();
 
-        if (!full_name || !phone || !challengeId || !challengeVerificationToken) {
+        if (!full_name || !phone || !password || !confirmPassword || !challengeId || !challengeVerificationToken) {
             return NextResponse.json(
-                { error: "Full name, phone, and verified calculation are required" },
+                { error: "Full name, phone, password, confirm password, and verified calculation are required" },
+                { status: 400 }
+            );
+        }
+
+        if (password.length < 6) {
+            return NextResponse.json(
+                { error: "Password must be at least 6 characters long" },
+                { status: 400 }
+            );
+        }
+
+        if (password !== confirmPassword) {
+            return NextResponse.json(
+                { error: "Password and confirm password must match" },
                 { status: 400 }
             );
         }
@@ -181,10 +198,13 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        const hashedPassword = await bcrypt.hash(password, 12);
+
         const patient = await prisma.patients.create({
             data: {
                 full_name,
                 phone,
+                password: hashedPassword,
                 age: parsedAge,
                 gender,
                 admin_id,

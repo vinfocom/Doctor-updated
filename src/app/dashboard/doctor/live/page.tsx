@@ -66,7 +66,7 @@ const EMPTY_STATE: LiveResponse = {
     total_today: 0,
 };
 
-const ROTATE_INTERVAL_MS = 3000;
+const ROTATE_INTERVAL_MS = 10000;
 const TICKER_SEPARATOR = " \u2022 ";
 const TICKER_MESSAGE =
     [
@@ -168,12 +168,21 @@ function FocusCard({
     const numberColor = label.toLowerCase() === "next" ? "text-orange-300" : "text-emerald-400";
 
     return (
-        <div className={`flex min-h-0 flex-col items-center justify-center text-center ${compact ? "h-full gap-[clamp(0.35rem,0.8vh,0.75rem)] px-2 py-1" : "min-h-[200px] gap-3 px-4 py-5 sm:min-h-[240px] sm:gap-4"}`}>
-            <p className={`${compact ? "text-[clamp(1rem,1.8vw,1.35rem)] tracking-[0.22em]" : "text-[1rem] tracking-[0.22em] sm:text-[1.15rem] lg:text-[1.3rem] lg:tracking-[0.28em]"} font-bold uppercase text-slate-500`}>{label}</p>
-            <div className={`${compact ? "text-[clamp(3.2rem,10vmin,7rem)]" : "text-[clamp(3.6rem,16vw,6.5rem)] sm:text-[clamp(4.5rem,12vw,8rem)]"} font-black leading-none ${numberColor}`}>
+        <div className={`flex min-h-0 flex-col items-center justify-center text-center ${compact ? "gap-[clamp(0.45rem,0.85vh,0.8rem)] px-[clamp(0.9rem,1.8vw,1.7rem)] py-[clamp(0.35rem,0.7vh,0.55rem)]" : "min-h-[200px] gap-3 px-4 py-5 sm:min-h-[240px] sm:gap-4"}`}>
+            <p className={`${compact ? "text-[clamp(0.72rem,1.15vw,0.92rem)] tracking-[0.15em]" : "text-[1rem] tracking-[0.22em] sm:text-[1.15rem] lg:text-[1.3rem] lg:tracking-[0.28em]"} font-bold uppercase text-slate-500`}>{label}</p>
+            <div className={`${compact ? "text-[clamp(2.6rem,7.2vmin,4.8rem)]" : "text-[clamp(3.6rem,16vw,6.5rem)] sm:text-[clamp(4.5rem,12vw,8rem)]"} font-black leading-none ${numberColor}`}>
                 {appointment?.queue_number ?? "--"}
             </div>
-            <p className={`max-w-full truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.95rem,2vmin,1.5rem)]" : "text-[1rem] sm:text-[1.15rem] lg:text-[clamp(1.15rem,2.5vw,2rem)]"}`}>
+            <p
+                className={`font-semibold text-slate-900 ${compact ? "max-w-[min(100%,32rem)] text-[clamp(0.95rem,1.65vmin,1.35rem)] leading-[1.12]" : "max-w-full text-[1rem] sm:text-[1.15rem] lg:text-[clamp(1.15rem,2.5vw,2rem)]"}`}
+                style={compact ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    textWrap: "balance",
+                } : undefined}
+            >
                 {appointment?.patient_name || "No Patient"}
             </p>
         </div>
@@ -216,12 +225,12 @@ function RotatingAppointmentGrid({
         : "border-indigo-200 bg-indigo-50/55 text-indigo-500";
     const appointmentNumberColor = isMissedSection ? "text-red-500" : "text-indigo-600";
 
-    const numberColumnClass = compact ? "grid-cols-[clamp(3.5rem,8vw,5.5rem)_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)] sm:grid-cols-[88px_minmax(0,1fr)]";
+    const numberColumnClass = compact ? "grid-cols-[clamp(3.4rem,5vw,4.6rem)_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)] sm:grid-cols-[88px_minmax(0,1fr)]";
     const rowCardClass = compact
-        ? "min-h-[clamp(1.5rem,3vh,2.1rem)] gap-[clamp(0.2rem,0.45vw,0.35rem)] px-[clamp(0.38rem,0.7vw,0.55rem)] py-[clamp(0.08rem,0.2vh,0.18rem)]"
+        ? "min-h-[clamp(1.5rem,2.4vh,2rem)] gap-[clamp(0.3rem,0.5vw,0.45rem)] px-[clamp(0.5rem,0.8vw,0.7rem)] py-[clamp(0.15rem,0.28vh,0.24rem)]"
         : "min-h-[48px] gap-2 px-2.5 sm:min-h-[56px] sm:px-3";
-    const sectionPaddingClass = compact ? "px-[clamp(0.75rem,1.6vmin,1.05rem)] pb-[clamp(0.4rem,0.9vmin,0.65rem)] pt-[clamp(0.45rem,1vmin,0.7rem)]" : "p-3 sm:p-4 lg:p-5";
-    const sectionHeaderClass = compact ? "mb-[clamp(0.2rem,0.45vh,0.35rem)]" : "mb-4";
+    const sectionPaddingClass = compact ? "px-[clamp(0.8rem,1.7vmin,1.1rem)] pb-[clamp(0.35rem,0.7vmin,0.55rem)] pt-[clamp(0.35rem,0.8vmin,0.55rem)]" : "p-3 sm:p-4 lg:p-5";
+    const sectionHeaderClass = compact ? "mb-[clamp(0.1rem,0.28vh,0.2rem)]" : "mb-4";
     const sectionTitleClass = compact ? "text-[clamp(0.78rem,1.45vmin,1rem)] tracking-[0.18em]" : "text-[clamp(0.85rem,1.8vmin,1.15rem)] tracking-[0.24em]";
     const columnHeaderClass = compact
         ? "px-2 pb-0 text-[clamp(0.52rem,0.9vmin,0.72rem)] tracking-[0.11em]"
@@ -229,7 +238,7 @@ function RotatingAppointmentGrid({
 
     const renderColumn = (columnItems: QueueCard[], columnKey: string) => (
         <div
-                className={`grid min-h-0 ${compact ? "gap-[clamp(0.18rem,0.45vh,0.32rem)]" : "gap-2"}`}
+                className={`grid min-h-0 ${compact ? "mx-auto w-full max-w-[24rem] gap-[clamp(0.24rem,0.5vh,0.38rem)]" : "gap-2"}`}
             style={{ gridTemplateRows: "auto repeat(4, minmax(0, 1fr))" }}
         >
             <div className={`grid ${numberColumnClass} font-semibold uppercase text-slate-500 ${compact ? columnHeaderClass : `text-[clamp(0.62rem,1.15vmin,0.9rem)] tracking-[0.16em] ${columnHeaderClass}`}`}>
@@ -247,7 +256,7 @@ function RotatingAppointmentGrid({
                             <>
                                 <div className={`${compact ? "text-[clamp(0.82rem,1.55vmin,1.1rem)] leading-none" : "text-xl sm:text-2xl"} font-black ${appointmentNumberColor}`}>{appointment.queue_number}</div>
                                 <div className="min-w-0">
-                                    <p className={`truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.76rem,1.16vmin,0.94rem)] leading-tight" : "text-[1rem] sm:text-[1.08rem] lg:text-[1.18rem]"}`}>
+                                    <p className={`truncate font-semibold text-slate-900 ${compact ? "text-[clamp(0.82rem,1.24vmin,1rem)] leading-tight" : "text-[1rem] sm:text-[1.08rem] lg:text-[1.18rem]"}`}>
                                         {appointment.patient_name}
                                     </p>
                                 </div>
@@ -273,7 +282,7 @@ function RotatingAppointmentGrid({
             </div>
 
             <div
-                className={`grid min-h-0 flex-1 transition-opacity duration-300 ${compact ? "grid-cols-2 gap-[clamp(0.45rem,1.05vmin,0.8rem)]" : "grid-cols-1 gap-3 md:grid-cols-2 md:gap-4"} ${fading ? "opacity-0" : "opacity-100"}`}
+                className={`grid min-h-0 flex-1 transition-opacity duration-300 ${compact ? "grid-cols-2 justify-center gap-[clamp(0.45rem,0.9vmin,0.8rem)]" : "grid-cols-1 gap-3 md:grid-cols-2 md:gap-4"} ${fading ? "opacity-0" : "opacity-100"}`}
             >
                 {renderColumn(columns.left, "left")}
                 {renderColumn(columns.right, "right")}
@@ -442,9 +451,9 @@ export default function LiveAppointmentsPage() {
     return (
         <div
             ref={fullscreenRef}
-            className={`bg-[#f4f7fb] text-slate-900 ${isFullscreen ? "h-[100dvh] overflow-hidden p-[clamp(2.5rem,4.25vw,5rem)]" : "min-h-screen p-4 sm:p-6 md:p-8 lg:p-10"}`}
+            className={`bg-[#f4f7fb] text-slate-900 ${isFullscreen ? "h-[100dvh] overflow-hidden px-[clamp(8.5rem,17vw,18rem)] py-[clamp(0.85rem,1.8vh,1.5rem)]" : "min-h-screen p-4 sm:p-6 md:p-8 lg:p-10"}`}
         >
-            <div className={`mx-auto ${isFullscreen ? "flex h-full max-w-none flex-col" : "max-w-7xl"}`}>
+            <div className={`mx-auto ${isFullscreen ? "flex h-full w-full max-w-[1020px] flex-col" : "max-w-7xl"}`}>
                 <div className={`flex gap-3 ${isFullscreen ? "mb-2 items-center justify-end" : "mb-4 flex-col items-stretch sm:flex-row sm:items-center sm:justify-end"}`}>
                     {!isFullscreen && me?.role === "DOCTOR" && clinics.length > 1 ? (
                         <select
@@ -464,18 +473,18 @@ export default function LiveAppointmentsPage() {
                         onClick={toggleFullscreen}
                         className={`inline-flex items-center justify-center rounded-full font-semibold text-white sm:self-auto ${
                             isFullscreen
-                                ? "bg-indigo-400 gap-1.5 px-3 py-1.5 text-xs"
+                                ? "bg-indigo-400 gap-1 px-2 py-1 text-[10px]"
                                 : "bg-indigo-600 gap-2 px-4 py-2 text-sm"
                         }`}
                     >
-                        {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+                        {isFullscreen ? <Minimize size={12} /> : <Maximize size={16} />}
                         {isFullscreen ? "Exit Full Screen" : "Full Screen"}
                     </button>
                 </div>
 
-                <div className={`grid ${isFullscreen ? "min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,0.76fr)_minmax(0,1.28fr)_auto] gap-[clamp(0.45rem,1.1vh,0.8rem)]" : "gap-4 sm:gap-5"}`}>
-                    <section className={`grid items-center rounded-[34px] bg-white ${isFullscreen ? "grid-cols-[minmax(0,1fr)_auto] gap-4 px-[clamp(1rem,2vw,1.5rem)] py-[clamp(0.7rem,1.4vh,1.1rem)]" : "grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-5"}`}>
-                        <div className="flex min-w-0 items-center gap-4">
+                <div className={`grid ${isFullscreen ? "min-h-0 flex-1 grid-rows-[auto_auto_auto_minmax(240px,1.6fr)_auto] gap-[clamp(0.3rem,0.8vh,0.6rem)]" : "gap-4 sm:gap-5"}`}>
+                    <section className={`grid items-center rounded-[34px] bg-white ${isFullscreen ? "grid-cols-[minmax(0,1fr)_auto] gap-2 px-[clamp(0.65rem,1.25vw,0.95rem)] py-[clamp(0.3rem,0.65vh,0.5rem)]" : "grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-5"}`}>
+                        <div className={`flex min-w-0 items-center ${isFullscreen ? "gap-2.5" : "gap-4"}`}>
                             <Image
                                 src="/dapto-logo.png"
                                 alt="Dapto"
@@ -485,38 +494,38 @@ export default function LiveAppointmentsPage() {
                                 priority
                             />
                             <div className="min-w-0">
-                                <div className={`${isFullscreen ? "text-[clamp(1rem,2.3vmin,1.5rem)]" : "text-[1.5rem]"} truncate font-semibold text-slate-800`}>{todayLabel}</div>
-                                <div className={`${isFullscreen ? "mt-0.5 text-[clamp(0.75rem,1.45vmin,1rem)]" : "mt-1 text-[1rem]"} truncate font-medium text-slate-500`}>{scheduleLabel}</div>
+                                <div className={`${isFullscreen ? "text-[clamp(0.86rem,1.7vmin,1.15rem)]" : "text-[1.5rem]"} truncate font-semibold text-slate-800`}>{todayLabel}</div>
+                                <div className={`${isFullscreen ? "mt-[1px] text-[clamp(0.62rem,1.05vmin,0.82rem)]" : "mt-1 text-[1rem]"} truncate font-semibold text-slate-900`}>{scheduleLabel}</div>
                             </div>
                         </div>
-                        <div className={`${isFullscreen ? "text-[clamp(1.15rem,2.7vmin,1.9rem)]" : "text-[1.3rem] sm:text-[1.6rem] lg:text-[1.9rem]"} font-bold text-slate-900 sm:text-right`}>{clock}</div>
+                        <div className={`${isFullscreen ? "text-[clamp(0.95rem,2vmin,1.35rem)]" : "text-[1.3rem] sm:text-[1.6rem] lg:text-[1.9rem]"} font-bold text-slate-900 sm:text-right`}>{clock}</div>
                     </section>
 
-                    <section className={`grid items-center ${isFullscreen ? "grid-cols-2 gap-6 px-[clamp(0.5rem,1.2vw,0.75rem)] py-0" : "grid-cols-1 gap-2 px-1 py-1 md:grid-cols-2 md:gap-6 md:px-3"}`}>
+                    <section className={`grid items-center ${isFullscreen ? "grid-cols-2 gap-6 px-[clamp(0.9rem,1.8vw,1.5rem)] py-0" : "grid-cols-1 gap-2 px-1 py-1 md:grid-cols-2 md:gap-6 md:px-3"}`}>
                         <div className="min-w-0">
-                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
+                            <p className={`${isFullscreen ? "text-[clamp(1rem,2.4vmin,1.5rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
                                 {formatDoctorName(liveData.doctor_name || selectedClinic?.doctor?.doctor_name || me?.name || "Doctor")}
                             </p>
                         </div>
                         <div className="min-w-0 md:text-right">
-                            <p className={`${isFullscreen ? "text-[clamp(1.25rem,3.4vmin,2.2rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
+                            <p className={`${isFullscreen ? "text-[clamp(1rem,2.4vmin,1.5rem)]" : "text-[1.4rem] sm:text-[1.8rem] lg:text-[2.2rem]"} truncate font-black leading-tight text-slate-900`}>
                                 {liveData.clinic_name || selectedClinic?.clinic_name || "Clinic"}
                             </p>
                         </div>
                     </section>
 
-                    <section className={`grid min-h-0 rounded-[clamp(1.5rem,3vmin,2.375rem)] bg-white ${isFullscreen ? "grid-cols-2 gap-[clamp(0.5rem,1.5vw,1rem)] px-[clamp(0.75rem,1.7vw,1.25rem)] py-[clamp(0.4rem,1vh,0.75rem)]" : "grid-cols-1 gap-4 px-4 py-4 sm:px-5 md:grid-cols-2 md:gap-8 md:px-6"}`}>
+                    <section className={`grid rounded-[clamp(1.3rem,2.4vmin,1.9rem)] bg-white ${isFullscreen ? "grid-cols-2 items-start gap-[clamp(0.8rem,1.6vw,1.15rem)] px-[clamp(0.9rem,1.7vw,1.25rem)] pt-[clamp(0.2rem,0.45vh,0.3rem)] pb-[clamp(0.35rem,0.7vh,0.5rem)]" : "min-h-0 grid-cols-1 gap-4 px-4 py-4 sm:px-5 md:grid-cols-2 md:gap-8 md:px-6"}`}>
                         <FocusCard label="Current" appointment={liveData.current} compact={isFullscreen} />
                         <FocusCard label="Next" appointment={liveData.next} compact={isFullscreen} />
                     </section>
 
-                    <div className={`grid min-h-0 ${isFullscreen ? "grid-rows-2 gap-[clamp(0.45rem,1.1vh,0.8rem)] overflow-hidden" : "gap-4"}`}>
+                    <div className={`grid min-h-0 ${isFullscreen ? "grid-rows-[1fr_1fr] gap-[clamp(0.28rem,0.7vh,0.5rem)] overflow-hidden" : "gap-4"}`}>
                         <RotatingAppointmentGrid title="Remaining" items={liveData.remaining} compact={isFullscreen} />
                         <RotatingAppointmentGrid title="Missed" items={liveData.missed} compact={isFullscreen} />
                     </div>
 
-                    <section className={`overflow-hidden rounded-full bg-white/80 text-indigo-700 ${isFullscreen ? "px-4 py-[clamp(0.35rem,0.9vh,0.6rem)]" : "px-4 py-2.5 sm:px-5 sm:py-3"}`}>
-                        <div className="flex w-max animate-[liveTicker_34s_linear_infinite] whitespace-nowrap text-[0.82rem] font-medium tracking-[0.04em] sm:text-[0.95rem] lg:text-[1.05rem]">
+                    <section className={`overflow-hidden rounded-full bg-white/80 text-indigo-700 ${isFullscreen ? "px-3 py-[clamp(0.2rem,0.5vh,0.35rem)]" : "px-4 py-2.5 sm:px-5 sm:py-3"}`}>
+                        <div className={`flex w-max animate-[liveTicker_34s_linear_infinite] whitespace-nowrap font-medium tracking-[0.04em] ${isFullscreen ? "text-[0.68rem]" : "text-[0.82rem] sm:text-[0.95rem] lg:text-[1.05rem]"}`}>
                             <span className="pr-24">{TICKER_MESSAGE}</span>
                             <span className="pr-24" aria-hidden="true">
                                 {TICKER_MESSAGE}

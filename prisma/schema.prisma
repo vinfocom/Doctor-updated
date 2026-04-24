@@ -83,6 +83,7 @@ model doctors {
   document_url           String?                   @db.VarChar(500)
   profile_pic_url        String?                   @db.VarChar(500)
   push_token             String?                   @db.VarChar(255)
+  slug                   String?                   @unique(map: "slug") @db.VarChar(255)
   active_from            DateTime?                 @db.Date
   active_to              DateTime?                 @db.Date
   num_clinics            Int?                      @default(0)
@@ -94,6 +95,10 @@ model doctors {
   schedules              doctor_clinic_schedule[]
   leaves                 doctor_leaves[]
   doctorRemainderQueues  doctor_remainder_queue[]
+  live_queue_side_ads    live_queue_side_ads[]
+  sms_recharge_logs      doctor_sms_recharge_log[]
+  sms_service            doctor_sms_service?
+  sms_usage_logs         doctor_sms_usage_log[]
   whatsapp_numbers       doctor_whatsapp_numbers[]
   admin                  admins                    @relation(fields: [admin_id], references: [admin_id])
   user                   users?                    @relation(fields: [user_id], references: [user_id])
@@ -116,21 +121,22 @@ model doctor_whatsapp_numbers {
 }
 
 model clinics {
-  clinic_id    Int                      @id @default(autoincrement())
-  clinic_name  String?                  @db.VarChar(255)
-  phone        String?                  @db.VarChar(255)
-  status       ClinicStatus?
-  admin_id     Int
-  doctor_id    Int?
-  location     String?                  @db.VarChar(255)
-  barcode_url  String?                  @db.VarChar(500)
-  qr_storage_url String?                @db.VarChar(500)
-  created_at   DateTime?                @default(now()) @db.Timestamp(0)
-  appointments appointment[]
-  admin        admins                   @relation(fields: [admin_id], references: [admin_id])
-  doctor       doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
-  schedules    doctor_clinic_schedule[]
-  clinic_staff clinic_staff[]
+  clinic_id          Int                      @id @default(autoincrement())
+  clinic_name        String?                  @db.VarChar(255)
+  phone              String?                  @db.VarChar(255)
+  status             ClinicStatus?
+  admin_id           Int
+  doctor_id          Int?
+  location           String?                  @db.VarChar(255)
+  barcode_url        String?                  @db.VarChar(500)
+  qr_storage_url      String?                  @db.VarChar(500)
+  created_at         DateTime?                @default(now()) @db.Timestamp(0)
+  appointments       appointment[]
+  admin              admins                   @relation(fields: [admin_id], references: [admin_id])
+  doctor             doctors?                 @relation(fields: [doctor_id], references: [doctor_id])
+  schedules          doctor_clinic_schedule[]
+  clinic_staff       clinic_staff[]
+  live_queue_side_ads live_queue_side_ads[]
 
   @@index([admin_id], map: "clinics_admin_id_fkey")
   @@index([doctor_id], map: "clinics_doctor_id_fkey")
@@ -179,9 +185,12 @@ model inbound_turn_queue {
   dead_reason   String?   @db.Text
   created_at    DateTime  @default(now()) @db.Timestamp(0)
   updated_at    DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+  channel_account_id BigInt?
+  source_channel String?  @db.VarChar(30)
 
   @@index([status, next_retry_at], map: "idx_inbound_turn_poll")
   @@index([locked_at, lock_owner], map: "idx_inbound_turn_lock")
+  @@index([channel_account_id], map: "idx_inbound_turn_channel_account")
 }
 
 model patient_whatsapp_numbers {
@@ -248,9 +257,14 @@ model appointment_notification_log {
   locked_at            DateTime?    @db.DateTime(0)
   next_retry_at        DateTime?    @db.DateTime(0)
   provider_message_sid String?      @db.VarChar(80)
+  channel_account_id   BigInt?
+  doctor_id            Int?
+  source_channel       String?      @db.VarChar(30)
   appointment          appointment? @relation(fields: [appointment_id], references: [appointment_id])
 
   @@index([appointment_id], map: "appointment_notification_log_appointment_id_fkey")
+  @@index([channel_account_id], map: "idx_appt_notif_channel_account")
+  @@index([doctor_id], map: "idx_appt_notif_doctor")
 }
 
 model doctor_leaves {
@@ -302,15 +316,22 @@ model conversation_sessions {
   admin_id            Int?
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamp(0)
   fsm_extra_json      String?  @db.Text
+  channel_account_id  BigInt?
+  source_channel      String?  @db.VarChar(30)
+
+  @@index([channel_account_id], map: "idx_conv_sessions_channel_account")
 }
 
 model inbound_message_sids {
-  message_sid String   @id @db.VarChar(255)
-  user_id     String   @db.VarChar(255)
-  body        String?  @db.Text
-  received_at DateTime @default(now()) @db.Timestamp(0)
+  message_sid         String   @id @db.VarChar(255)
+  user_id             String   @db.VarChar(255)
+  body                String?  @db.Text
+  received_at         DateTime @default(now()) @db.Timestamp(0)
+  channel_account_id  BigInt?
+  source_channel      String?  @db.VarChar(30)
 
   @@index([received_at], map: "idx_inbound_message_received")
+  @@index([channel_account_id], map: "idx_inbound_sids_channel_account")
 }
 
 model user_tokens {
@@ -397,6 +418,99 @@ model doctor_cache_invalidation_queue {
   @@index([status, queue_id], map: "idx_dcq_poll")
 }
 
+model channel_accounts {
+  channel_account_id  BigInt    @id @default(autoincrement())
+  admin_id            Int?
+  channel             String    @db.VarChar(30)
+  provider            String    @db.VarChar(30)
+  account_label       String?   @db.VarChar(120)
+  sender_identity     String    @db.VarChar(191)
+  webhook_path_key    String?   @unique(map: "uq_channel_webhook_key") @db.VarChar(120)
+  webhook_secret_enc  String?   @db.Text
+  credential_json_enc String?   @db.LongText
+  status              String    @default("ACTIVE") @db.VarChar(20)
+  is_primary          Boolean   @default(false)
+  created_at          DateTime  @default(now()) @db.Timestamp(0)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([channel, provider, sender_identity], map: "uq_channel_provider_sender")
+  @@index([admin_id], map: "idx_channel_accounts_admin")
+  @@index([status], map: "idx_channel_accounts_status")
+}
+
+model doctor_channel_bindings {
+  binding_id          BigInt   @id @default(autoincrement())
+  doctor_id           Int
+  clinic_id           Int?
+  channel_account_id  BigInt
+  status              String   @default("ACTIVE") @db.VarChar(20)
+  is_primary          Boolean  @default(true)
+  created_at          DateTime @default(now()) @db.Timestamp(0)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([doctor_id, clinic_id, channel_account_id], map: "uq_doctor_clinic_account")
+  @@index([doctor_id], map: "idx_dcb_doctor")
+  @@index([clinic_id], map: "idx_dcb_clinic")
+  @@index([channel_account_id], map: "idx_dcb_channel_account")
+  @@index([doctor_id, clinic_id, is_primary, status], map: "idx_dcb_primary")
+}
+
+model doctor_evolution_bindings {
+  binding_id                  BigInt   @id @default(autoincrement())
+  doctor_id                   Int
+  clinic_id                   Int?
+  evolution_instance_name     String   @unique(map: "uq_doctor_evolution_instance") @db.VarChar(191)
+  evolution_account_identity  String?  @unique(map: "uq_doctor_evolution_account") @db.VarChar(64)
+  status                      String   @default("ACTIVE") @db.VarChar(20)
+  created_at                  DateTime @default(now()) @db.Timestamp(0)
+  updated_at                  DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([doctor_id], map: "idx_doctor_evolution_doctor")
+  @@index([status], map: "idx_doctor_evolution_status")
+}
+
+model doctor_sms_recharge_log {
+  id             Int      @id @default(autoincrement())
+  doctor_id      Int
+  credits_added  Int
+  previous_total Int
+  new_total      Int
+  remarks        String?  @db.VarChar(255)
+  recharged_by   Int?
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+  doctor         doctors  @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+
+  @@index([doctor_id, created_at], map: "idx_doctor_sms_recharge_log_lookup")
+}
+
+model doctor_sms_service {
+  id                  Int              @id @default(autoincrement())
+  doctor_id           Int              @unique(map: "doctor_sms_service_doctor_id_key")
+  sms_service_enabled Boolean          @default(false)
+  sms_service_status  SmsServiceStatus @default(DISABLED)
+  sms_credit_total    Int              @default(0)
+  sms_credit_used     Int              @default(0)
+  current_pack_total  Int              @default(0)
+  current_pack_used   Int              @default(0)
+  last_recharged_at   DateTime?        @db.Timestamp(0)
+  created_at          DateTime         @default(now()) @db.Timestamp(0)
+  updated_at          DateTime         @default(now()) @db.Timestamp(0)
+  doctor              doctors          @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+
+  @@index([sms_service_status], map: "idx_doctor_sms_service_status")
+}
+
+model doctor_sms_usage_log {
+  id             Int      @id @default(autoincrement())
+  doctor_id      Int
+  appointment_id Int      @unique(map: "uq_doctor_sms_usage_appointment")
+  credits_used   Int      @default(1)
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+  doctor         doctors  @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+
+  @@index([doctor_id, created_at], map: "idx_doctor_sms_usage_lookup")
+}
+
 model message_delivery_status {
   delivery_id          BigInt   @id @default(autoincrement())
   provider             String   @db.VarChar(30)
@@ -409,10 +523,39 @@ model message_delivery_status {
   error_message        String?  @db.Text
   payload_json         String?  @db.Text
   created_at           DateTime @default(now()) @db.Timestamp(0)
-  updated_at           DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  updated_at           DateTime @default(now()) @db.Timestamp(0)
+  channel_account_id   BigInt?
+  doctor_id            Int?
+  admin_id             Int?
 
   @@unique([provider, provider_message_sid], map: "uq_provider_sid")
   @@index([message_status, updated_at], map: "idx_delivery_status")
+  @@index([channel_account_id], map: "idx_delivery_status_channel_account")
+  @@index([doctor_id], map: "idx_delivery_status_doctor")
+  @@index([admin_id], map: "idx_delivery_status_admin")
+}
+
+model live_queue_side_ads {
+  ad_id       Int                 @id @default(autoincrement())
+  doctor_id   Int
+  clinic_id   Int
+  position    LiveQueueAdPosition
+  type        LiveQueueAdType
+  asset_url   String              @db.VarChar(1000)
+  mime_type   String?             @db.VarChar(255)
+  title       String?             @db.VarChar(255)
+  is_active   Boolean             @default(true)
+  active_from DateTime?           @db.Date
+  active_to   DateTime?           @db.Date
+  sort_order  Int                 @default(0)
+  created_at  DateTime            @default(now()) @db.Timestamp(0)
+  updated_at  DateTime            @default(now()) @updatedAt @db.Timestamp(0)
+  clinic      clinics             @relation(fields: [clinic_id], references: [clinic_id], onDelete: Cascade)
+  doctor      doctors             @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+
+  @@index([doctor_id, clinic_id, position, is_active], map: "idx_live_queue_side_ads_lookup")
+  @@index([clinic_id], map: "live_queue_side_ads_clinic_id_fkey")
+  @@index([doctor_id], map: "live_queue_side_ads_doctor_id_fkey")
 }
 
 model qr_walkin_queue {
@@ -487,6 +630,22 @@ enum PatientStatus {
 enum PatientProfileType {
   SELF
   OTHER
+}
+
+enum SmsServiceStatus {
+  DISABLED
+  ACTIVE
+  EXHAUSTED
+}
+
+enum LiveQueueAdPosition {
+  LEFT
+  RIGHT
+}
+
+enum LiveQueueAdType {
+  LOGO
+  VIDEO
 }
 
 enum users_role {
