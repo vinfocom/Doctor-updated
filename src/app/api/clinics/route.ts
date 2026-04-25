@@ -3,11 +3,6 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/jwt";
 import { cookies } from "next/headers";
 
-function getTodayDate() {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
 async function attachClinicQrStorageUrls<T extends { clinic_id: number }>(clinics: T[]) {
     if (clinics.length === 0) return clinics;
 
@@ -49,49 +44,6 @@ export async function GET(req: Request) {
     }
 
     try {
-        if (user.role === "PATIENT") {
-            const patient = await prisma.patients.findUnique({
-                where: { patient_id: user.patientId ?? user.userId },
-                select: { admin_id: true },
-            });
-
-            if (!patient) {
-                return NextResponse.json({ error: "Patient not found" }, { status: 404 });
-            }
-
-            const today = getTodayDate();
-            const clinics = await prisma.clinics.findMany({
-                where: {
-                    admin_id: patient.admin_id,
-                    doctor: {
-                        is: {
-                            status: "ACTIVE",
-                            AND: [
-                                { OR: [{ active_from: null }, { active_from: { lte: today } }] },
-                                { OR: [{ active_to: null }, { active_to: { gte: today } }] },
-                            ],
-                        },
-                    },
-                },
-                include: {
-                    schedules: true,
-                    doctor: {
-                        select: {
-                            doctor_id: true,
-                            doctor_name: true,
-                            profile_pic_url: true,
-                            num_clinics: true,
-                            specialization: true,
-                            status: true,
-                        },
-                    },
-                },
-                orderBy: { clinic_name: "asc" },
-            });
-
-            return NextResponse.json({ clinics: await attachClinicQrStorageUrls(clinics) });
-        }
-
         // For doctors, filter to their own clinics
         if (user.role === 'DOCTOR') {
             const doctor = await prisma.doctors.findUnique({
@@ -102,6 +54,14 @@ export async function GET(req: Request) {
                 const doctorClinics = await prisma.clinics.findMany({
                     where: { doctor_id: doctor.doctor_id },
                     include: {
+                        doctor: {
+                            select: {
+                                doctor_id: true,
+                                doctor_name: true,
+                                specialization: true,
+                                education: true,
+                            }
+                        },
                         schedules: {
                             orderBy: { day_of_week: 'asc' }
                         }
@@ -116,7 +76,7 @@ export async function GET(req: Request) {
         if (user.role === 'CLINIC_STAFF') {
             const staff = await prisma.clinic_staff.findUnique({
                 where: { user_id: user.userId },
-                include: { clinics: { include: { schedules: { orderBy: { day_of_week: 'asc' } } } }, doctors: { select: { doctor_id: true, doctor_name: true, profile_pic_url: true, num_clinics: true, specialization: true, status: true } } }
+                include: { clinics: { include: { schedules: { orderBy: { day_of_week: 'asc' } } } }, doctors: { select: { doctor_id: true, doctor_name: true, profile_pic_url: true, num_clinics: true, specialization: true, education: true, status: true } } }
             });
 
             if (staff && staff.clinics) {
@@ -145,6 +105,7 @@ export async function GET(req: Request) {
                         profile_pic_url: true,
                         num_clinics: true,
                         specialization: true,
+                        education: true,
                         status: true,
                     }
                 }
@@ -160,6 +121,7 @@ export async function GET(req: Request) {
                 profile_pic_url: true,
                 num_clinics: true,
                 specialization: true,
+                education: true,
                 status: true,
             },
             orderBy: { doctor_name: 'asc' }
@@ -264,7 +226,7 @@ export async function POST(req: Request) {
 
             return await tx.clinics.findUnique({
                 where: { clinic_id: newClinic.clinic_id },
-                include: { schedules: true, doctor: { select: { doctor_id: true, doctor_name: true, profile_pic_url: true, num_clinics: true, specialization: true, status: true } } }
+                include: { schedules: true, doctor: { select: { doctor_id: true, doctor_name: true, profile_pic_url: true, num_clinics: true, specialization: true, education: true, status: true } } }
             });
         });
 
