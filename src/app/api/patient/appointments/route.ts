@@ -21,6 +21,37 @@ function phonesMatch(left: string | null | undefined, right: string | null | und
     return false;
 }
 
+async function createPendingSmsNotificationLog({
+    appointmentId,
+    destination,
+    adminId,
+    sourceChannel,
+}: {
+    appointmentId: number;
+    destination: string | null | undefined;
+    adminId: number;
+    sourceChannel: "web" | "app";
+}) {
+    const normalizedDestination = String(destination || "").trim();
+    if (!normalizedDestination) return;
+
+    try {
+        await prisma.appointment_notification_log.create({
+            data: {
+                appointment_id: appointmentId,
+                event_type: "CONFIRMATION",
+                channel: "sms",
+                destination: normalizedDestination,
+                status: "PENDING",
+                admin_id: adminId,
+                meta_json: { source_channel: sourceChannel },
+            },
+        });
+    } catch (error) {
+        console.error("Error creating pending SMS notification log:", error);
+    }
+}
+
 async function syncPatientBookingState(input: {
     patient_id: number;
     doctor_id: number;
@@ -435,6 +466,13 @@ export async function POST(req: Request) {
                 },
                 ...(appointmentBookingId != null ? { booking_id: appointmentBookingId } : {}),
             },
+        });
+
+        await createPendingSmsNotificationLog({
+            appointmentId: appointment.appointment_id,
+            destination: targetPatient.phone || patient.phone,
+            adminId: patient.admin_id,
+            sourceChannel: channel,
         });
 
         await syncPatientBookingState({

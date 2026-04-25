@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import bcrypt from "bcryptjs";
+import { toDoctorSmsPayload, deriveDoctorSmsSnapshot } from "@/lib/doctorSms";
+import { isMissingPrismaTable } from "@/lib/prismaErrors";
 
 // GET: List doctors
 export async function GET(req: NextRequest) {
@@ -15,56 +17,51 @@ export async function GET(req: NextRequest) {
         const where: Record<string, unknown> = {};
         if (adminId) where.admin_id = Number(adminId);
 
-        const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
-        const cookieToken = req.cookies.get("token")?.value;
-        const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null);
-
-        if (token) {
-            const session = await getSession();
-            if (session?.role === "PATIENT") {
-                const patient = await prisma.patients.findUnique({
-                    where: { patient_id: session.patientId ?? session.userId },
-                    select: { admin_id: true },
-                });
-                if (patient?.admin_id) {
-                    where.admin_id = patient.admin_id;
-                }
-                where.status = "ACTIVE";
-                where.AND = [
-                    {
-                        OR: [
-                            { active_from: null },
-                            { active_from: { lte: today } },
-                        ],
-                    },
-                    {
-                        OR: [
-                            { active_to: null },
-                            { active_to: { gte: today } },
-                        ],
-                    },
-                ];
-            }
-        }
-
-        const doctors = await prisma.doctors.findMany({
-            where,
-            include: {
-                admin: {
-                    select: {
-                        admin_id: true,
-                        user: {
-                            select: { user_id: true, name: true, email: true },
+        let doctors: any[];
+        try {
+            doctors = await prisma.doctors.findMany({
+                where,
+                include: {
+                    admin: {
+                        select: {
+                            admin_id: true,
+                            user: {
+                                select: { user_id: true, name: true, email: true },
+                            },
                         },
                     },
+                    user: {
+                        select: { email: true },
+                    },
+                    schedules: true,
+                    whatsapp_numbers: true,
+                    sms_service: true,
                 },
-                user: {
-                    select: { email: true },
+            });
+        } catch (error) {
+            if (!isMissingPrismaTable(error, "doctor_sms_service")) {
+                throw error;
+            }
+
+            doctors = await prisma.doctors.findMany({
+                where,
+                include: {
+                    admin: {
+                        select: {
+                            admin_id: true,
+                            user: {
+                                select: { user_id: true, name: true, email: true },
+                            },
+                        },
+                    },
+                    user: {
+                        select: { email: true },
+                    },
+                    schedules: true,
+                    whatsapp_numbers: true,
                 },
-                schedules: true,
-                whatsapp_numbers: true,
-            },
-        });
+            });
+        }
         const jsonSafe = <T,>(value: T): T =>
             JSON.parse(
                 JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v))
@@ -73,6 +70,7 @@ export async function GET(req: NextRequest) {
         const serializedDoctors = doctors.map(doc => ({
             ...doc,
             chat_id: doc.chat_id ? String(doc.chat_id) : null,
+            sms_service: toDoctorSmsPayload(doc.sms_service ?? null),
         }));
 
         return NextResponse.json({ doctors: jsonSafe(serializedDoctors) });
@@ -126,6 +124,15 @@ export async function DELETE(req: NextRequest) {
             await tx.doctor_clinic_schedule.deleteMany({ where: { doctor_id: doctor.doctor_id } });
             await tx.clinic_staff.deleteMany({ where: { doctor_id: doctor.doctor_id } });
             await tx.doctor_whatsapp_numbers.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            try {
+                await tx.doctor_sms_usage_log.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+                await tx.doctor_sms_recharge_log.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+                await tx.doctor_sms_service.deleteMany({ where: { doctor_id: doctor.doctor_id } });
+            } catch (error) {
+                if (!isMissingPrismaTable(error, "doctor_sms_service")) {
+                    throw error;
+                }
+            }
 
             // 1. Null out optional references
             await tx.clinics.updateMany({
@@ -174,8 +181,10 @@ export async function PATCH(req: NextRequest) {
             chat_id, telegram_userid, profile_pic_url, num_clinics, status, active_from, active_to,
             whatsapp_numbers, // array of { whatsapp_number: string }
             email, password, // newly added user credentials
+            sms_service_enabled,
+            sms_recharge_credits,
+            sms_recharge_remarks,
         } = body;
-
         if ((status !== undefined || active_from !== undefined || active_to !== undefined) && session.role !== "SUPER_ADMIN") {
             return NextResponse.json({ error: "Only super admin can approve, activate, or deactivate doctors" }, { status: 403 });
         }
@@ -259,17 +268,107 @@ export async function PATCH(req: NextRequest) {
                 });
             }
 
+            if (sms_service_enabled !== undefined || sms_recharge_credits !== undefined) {
+                try {
+                    const service = await tx.doctor_sms_service.upsert({
+                        where: { doctor_id: Number(doctor_id) },
+                        create: {
+                            doctor_id: Number(doctor_id),
+                        },
+                        update: {},
+                    });
+
+                    let totalCredits = service.sms_credit_total;
+                    let usedCredits = service.sms_credit_used;
+                    let currentPackTotal = (service as typeof service & { current_pack_total?: number | null }).current_pack_total ?? service.sms_credit_total;
+                    let currentPackUsed = (service as typeof service & { current_pack_used?: number | null }).current_pack_used ?? service.sms_credit_used;
+                    let enabled = service.sms_service_enabled;
+                    let lastRechargedAt = service.last_recharged_at;
+                    const rechargeCredits = Math.max(0, Number(sms_recharge_credits ?? 0));
+
+                    if (sms_service_enabled !== undefined) {
+                        enabled = Boolean(sms_service_enabled);
+                    }
+
+                    if (rechargeCredits > 0) {
+                        const currentPackSnapshot = deriveDoctorSmsSnapshot({
+                            sms_service_enabled: enabled,
+                            sms_credit_total: totalCredits,
+                            sms_credit_used: usedCredits,
+                            current_pack_total: currentPackTotal,
+                            current_pack_used: currentPackUsed,
+                        });
+                        const currentRemainingCredits = currentPackSnapshot.remainingCredits;
+                        totalCredits += rechargeCredits;
+                        lastRechargedAt = new Date();
+                        currentPackTotal = currentRemainingCredits + rechargeCredits;
+                        currentPackUsed = 0;
+                        await tx.doctor_sms_recharge_log.create({
+                            data: {
+                                doctor_id: Number(doctor_id),
+                                credits_added: rechargeCredits,
+                                previous_total: service.sms_credit_total,
+                                new_total: totalCredits,
+                                remarks: sms_recharge_remarks ? String(sms_recharge_remarks) : null,
+                                recharged_by: session.userId,
+                            },
+                        });
+                    }
+
+                    const smsSnapshot = deriveDoctorSmsSnapshot({
+                        sms_service_enabled: enabled,
+                        sms_credit_total: totalCredits,
+                        sms_credit_used: usedCredits,
+                        current_pack_total: currentPackTotal,
+                        current_pack_used: currentPackUsed,
+                    });
+
+                    await tx.doctor_sms_service.update({
+                        where: { doctor_id: Number(doctor_id) },
+                        data: {
+                            sms_service_enabled: enabled,
+                            sms_credit_total: totalCredits,
+                            sms_credit_used: usedCredits,
+                            current_pack_total: currentPackTotal,
+                            current_pack_used: currentPackUsed,
+                            sms_service_status: smsSnapshot.status,
+                            last_recharged_at: lastRechargedAt,
+                        },
+                    });
+                } catch (error) {
+                    if (!isMissingPrismaTable(error, "doctor_sms_service")) {
+                        throw error;
+                    }
+                }
+            }
+
             return doc;
         });
 
         // Re-fetch with whatsapp_numbers and user email included
-        const full = await prisma.doctors.findUnique({
-            where: { doctor_id: Number(doctor_id) },
-            include: {
-                whatsapp_numbers: true,
-                user: { select: { email: true } },
-            },
-        });
+        let full: any;
+        try {
+            full = await prisma.doctors.findUnique({
+                where: { doctor_id: Number(doctor_id) },
+                include: {
+                    whatsapp_numbers: true,
+                    user: { select: { email: true } },
+                    sms_service: true,
+                },
+            });
+        } catch (error) {
+            if (!isMissingPrismaTable(error, "doctor_sms_service")) {
+                throw error;
+            }
+
+            full = await prisma.doctors.findUnique({
+                where: { doctor_id: Number(doctor_id) },
+                include: {
+                    whatsapp_numbers: true,
+                    user: { select: { email: true } },
+                },
+            });
+        }
 
         const jsonSafe = <T,>(value: T): T =>
             JSON.parse(
@@ -278,7 +377,11 @@ export async function PATCH(req: NextRequest) {
 
         return NextResponse.json({
             message: "Doctor updated successfully",
-            doctor: jsonSafe({ ...full, chat_id: full?.chat_id ? String(full.chat_id) : null }),
+            doctor: jsonSafe({
+                ...full,
+                chat_id: full?.chat_id ? String(full.chat_id) : null,
+                sms_service: toDoctorSmsPayload(full?.sms_service ?? null),
+            }),
         });
     } catch (error) {
         console.error("Update doctor error:", error);

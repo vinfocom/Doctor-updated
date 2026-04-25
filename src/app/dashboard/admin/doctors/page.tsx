@@ -4,10 +4,18 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PremiumButton } from "@/components/ui/PremiumButton";
-import { Shield, UserPlus, X, Pencil, Trash2, AlertTriangle, UploadCloud, FileText, CheckCircle2, Plus, CircleMinus, Power, Smartphone, User, Bot, Building2, Stethoscope, GraduationCap, MapPin, BarChart3, Eye, EyeOff, Phone, Hash, FileDigit, ExternalLink } from "lucide-react";
+import { Shield, UserPlus, X, Pencil, Trash2, AlertTriangle, UploadCloud, FileText, CheckCircle2, Plus, CircleMinus, Power, Smartphone, User, Bot, Building2, Stethoscope, GraduationCap, MapPin, BarChart3, Eye, EyeOff, Phone, Hash, FileDigit, ExternalLink, MessageSquareText } from "lucide-react";
 
 /* ───────────────── Types ───────────────── */
 interface WhatsAppNum { id?: number; whatsapp_number: string }
+interface DoctorSmsService {
+    enabled: boolean;
+    status: "DISABLED" | "ACTIVE" | "EXHAUSTED";
+    totalCredits: number;
+    usedCredits: number;
+    remainingCredits: number;
+    displayText: string;
+}
 interface Doctor {
     doctor_id: number;
     doctor_name: string;
@@ -30,6 +38,7 @@ interface Doctor {
     status?: string | null;
     whatsapp_numbers?: WhatsAppNum[];
     user?: { email: string | null } | null;
+    sms_service?: DoctorSmsService | null;
 }
 
 const INITIAL_FORM = {
@@ -59,8 +68,32 @@ const getEffectiveStatus = (doc: Doctor) => {
     return "ACTIVE";
 };
 
-const isPendingApproval = (doc: Doctor) =>
-    doc.status === "INACTIVE" && !toDateInput(doc.active_from) && !toDateInput(doc.active_to);
+const getSmsStatusTone = (status?: string | null) => {
+    if (status === "ACTIVE") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (status === "EXHAUSTED") return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-gray-50 text-gray-600 border-gray-200";
+};
+
+const getSmsRowBadge = (sms?: DoctorSmsService | null) => {
+    if (!sms?.enabled) {
+        return {
+            label: "SMS Disabled",
+            className: "bg-red-50 text-red-600 border-red-200",
+        };
+    }
+
+    if (sms.status === "EXHAUSTED" || sms.remainingCredits <= 0) {
+        return {
+            label: "SMS Exhausted",
+            className: "bg-amber-50 text-amber-700 border-amber-200",
+        };
+    }
+
+    return {
+        label: "SMS Active",
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+};
 
 /* ───────────── Reusable upload component ───────────── */
 function FileUploadBox({
@@ -76,7 +109,7 @@ function FileUploadBox({
     return (
         <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
-                {label} <span className="text-gray-400 text-xs font-normal">(PDF, JPG, PNG, WEBP - max 5 MB)</span>
+                {label} <span className="text-gray-400 text-xs font-normal">(PDF, JPG, PNG — max 5 MB)</span>
             </label>
             <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={onFileChange} className="hidden" id={id} />
             {!file && !url ? (
@@ -189,12 +222,15 @@ export default function AdminDoctorsPage() {
         gst_number: "", pan_number: "", address: "", registration_no: "", education: "",
         chat_id: "", telegram_userid: "", num_clinics: "0", active_from: "", active_to: "",
         email: "", password: "",
+        sms_service_enabled: false, sms_recharge_credits: "0", sms_recharge_remarks: "",
     });
     const [editError, setEditError] = useState("");
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editWaNums, setEditWaNums] = useState<string[]>([""]);
     const [showCreatePassword, setShowCreatePassword] = useState(false);
     const [showEditPassword, setShowEditPassword] = useState(false);
+    const [smsToggleConfirmOpen, setSmsToggleConfirmOpen] = useState(false);
+    const [pendingSmsToggleValue, setPendingSmsToggleValue] = useState<boolean | null>(null);
 
     // ── Edit file uploads
     const editFileRef = useRef<HTMLInputElement>(null);
@@ -279,9 +315,9 @@ export default function AdminDoctorsPage() {
         try {
             const effectiveStatus = getEffectiveStatus(statusToggleDoc);
             const newStatus = effectiveStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-            const nextActiveFrom = toDateInput(statusToggleDoc.active_from) || new Date().toISOString().split("T")[0];
-            if (newStatus === "ACTIVE" && (!nextActiveFrom || !statusToggleActiveTo)) {
-                setStatusToggleError("Active From and Active To dates are required to activate.");
+            const todayStr = new Date().toISOString().split("T")[0];
+            if (newStatus === "ACTIVE" && !statusToggleActiveTo) {
+                setStatusToggleError("Active To date is required to activate.");
                 return;
             }
             const res = await fetch("/api/doctors", {
@@ -291,8 +327,8 @@ export default function AdminDoctorsPage() {
                     doctor_id: statusToggleDoc.doctor_id,
                     status: newStatus,
                     ...(newStatus === "ACTIVE"
-                        ? { active_from: nextActiveFrom, active_to: statusToggleActiveTo }
-                        : { active_to: new Date().toISOString().split("T")[0] }),
+                        ? { active_from: todayStr, active_to: statusToggleActiveTo }
+                        : {}),
                 }),
             });
             if (res.ok) {
@@ -324,6 +360,9 @@ export default function AdminDoctorsPage() {
             active_to: toDateInput(doc.active_to),
             email: doc.user?.email || "",
             password: "", // Password is blank by default for security
+            sms_service_enabled: Boolean(doc.sms_service?.enabled),
+            sms_recharge_credits: "0",
+            sms_recharge_remarks: "",
         });
         setEditDocUrl(doc.document_url || ""); setEditDocFile(null); setEditUploadError("");
         setEditProfilePicUrl(doc.profile_pic_url || ""); setEditProfilePicFile(null); setEditProfilePicError("");
@@ -332,6 +371,25 @@ export default function AdminDoctorsPage() {
             : (doc.whatsapp_number ? [doc.whatsapp_number] : [""])
         );
         setEditError("");
+        setSmsToggleConfirmOpen(false);
+        setPendingSmsToggleValue(null);
+    };
+
+    const requestSmsToggleChange = (nextValue: boolean) => {
+        setPendingSmsToggleValue(nextValue);
+        setSmsToggleConfirmOpen(true);
+    };
+
+    const confirmSmsToggleChange = () => {
+        if (pendingSmsToggleValue === null) return;
+        setEditForm((prev) => ({ ...prev, sms_service_enabled: pendingSmsToggleValue }));
+        setSmsToggleConfirmOpen(false);
+        setPendingSmsToggleValue(null);
+    };
+
+    const cancelSmsToggleChange = () => {
+        setSmsToggleConfirmOpen(false);
+        setPendingSmsToggleValue(null);
     };
 
     /* ────── Submit edit ────── */
@@ -341,23 +399,21 @@ export default function AdminDoctorsPage() {
         setEditSubmitting(true);
         setEditError("");
         try {
-            const payload: Record<string, unknown> = {
-                doctor_id: editDoc.doctor_id,
-                ...editForm,
-                document_url: editDocUrl || null,
-                profile_pic_url: editProfilePicUrl || null,
-                whatsapp_numbers: editWaNums.filter(n => n.trim()).map(n => ({ whatsapp_number: n.trim() })),
-            };
-
-            if (user?.role === "SUPER_ADMIN") {
-                payload.active_from = editForm.active_from || null;
-                payload.active_to = editForm.active_to || null;
-            }
-
             const res = await fetch("/api/doctors", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    doctor_id: editDoc.doctor_id,
+                    ...editForm,
+                    document_url: editDocUrl || null,
+                    profile_pic_url: editProfilePicUrl || null,
+                    active_from: editForm.active_from || null,
+                    active_to: editForm.active_to || null,
+                    whatsapp_numbers: editWaNums.filter(n => n.trim()).map(n => ({ whatsapp_number: n.trim() })),
+                    sms_service_enabled: editForm.sms_service_enabled,
+                    sms_recharge_credits: Number(editForm.sms_recharge_credits || 0),
+                    sms_recharge_remarks: editForm.sms_recharge_remarks || null,
+                }),
             });
             const data = await res.json();
             if (res.ok) {
@@ -452,12 +508,12 @@ export default function AdminDoctorsPage() {
     return (
         <div className="w-full">
             <motion.div className="mb-8" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Manage Doctors</h1>
+                        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Manage Doctors</h1>
                         <p className="text-gray-500 mt-1 text-sm">View, edit and manage all registered doctors</p>
                     </div>
-                    <PremiumButton onClick={() => { setShowForm(!showForm); resetForm(); }} icon={UserPlus}>
+                    <PremiumButton className="w-full sm:w-auto" onClick={() => { setShowForm(!showForm); resetForm(); }} icon={UserPlus}>
                         Create New Doctor
                     </PremiumButton>
                 </div>
@@ -468,7 +524,7 @@ export default function AdminDoctorsPage() {
             )}
 
             {/* ────── Doctors Table ────── */}
-            <motion.div className="glass-card p-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <motion.div className="glass-card p-5 sm:p-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 {doctors.length === 0 ? (
                     <div className="text-center py-12">
                         <div className="mb-3 flex justify-center"><Stethoscope size={40} className="text-indigo-400" /></div>
@@ -479,7 +535,7 @@ export default function AdminDoctorsPage() {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Doctor's Name</th>
+                                    <th>Doctor&apos;s Name</th>
                                     <th>Status</th>
                                     <th>Phone</th>
                                     <th>Specialization</th>
@@ -491,6 +547,7 @@ export default function AdminDoctorsPage() {
                             <tbody>
                                 {doctors.map((doc, i) => {
                                     const pending = getPendingFields(doc);
+                                    const smsBadge = getSmsRowBadge(doc.sms_service);
                                     return (
                                         <motion.tr
                                             key={doc.doctor_id}
@@ -507,19 +564,24 @@ export default function AdminDoctorsPage() {
                                                             {doc.doctor_name?.charAt(0)?.toUpperCase()}
                                                         </div>
                                                     )}
-                                                    <span className="text-gray-800 font-medium group-hover:text-indigo-600 group-hover:underline transition-colors">Dr. {doc.doctor_name}</span>
+                                                    <div className="min-w-0">
+                                                        <span className="block text-gray-800 font-medium group-hover:text-indigo-600 group-hover:underline transition-colors">Dr. {doc.doctor_name}</span>
+                                                        <span className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${smsBadge.className}`}>
+                                                            <MessageSquareText size={12} />
+                                                            {smsBadge.label}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
                                                     {(() => {
                                                         const effectiveStatus = getEffectiveStatus(doc);
-                                                        const pendingApproval = isPendingApproval(doc);
                                                         return (
                                                             <>
-                                                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${pendingApproval ? "bg-amber-500" : effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
-                                                                <span className={`text-xs font-semibold ${pendingApproval ? "text-amber-600" : effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
-                                                                    {pendingApproval ? "Needs Approval" : effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
+                                                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${effectiveStatus === "INACTIVE" ? "bg-red-500" : "bg-green-500"}`} />
+                                                                <span className={`text-xs font-semibold ${effectiveStatus === "INACTIVE" ? "text-red-600" : "text-green-600"}`}>
+                                                                    {effectiveStatus === "INACTIVE" ? "Inactive" : "Active"}
                                                                 </span>
                                                             </>
                                                         );
@@ -543,7 +605,7 @@ export default function AdminDoctorsPage() {
                                                 )}
                                             </td>
                                             <td>
-                                                <div className="flex items-center gap-1.5">
+                                                <div className="flex flex-wrap items-center gap-1.5">
                                                     <motion.button
                                                         onClick={() => openEdit(doc)}
                                                         className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
@@ -553,17 +615,15 @@ export default function AdminDoctorsPage() {
                                                     </motion.button>
                                                     <motion.button
                                                         onClick={() => {
-                                                            if (user?.role !== "SUPER_ADMIN") return;
                                                             setStatusToggleDoc({ ...doc, status: getEffectiveStatus(doc) });
                                                             setStatusToggleActiveTo(toDateInput(doc.active_to));
                                                             setStatusToggleError("");
                                                         }}
-                                                        disabled={user?.role !== "SUPER_ADMIN"}
                                                         className={`p-2 rounded-lg transition-colors ${getEffectiveStatus(doc) === "INACTIVE"
                                                             ? "bg-green-50 text-green-600 hover:bg-green-100"
                                                             : "bg-orange-50 text-orange-600 hover:bg-orange-100"
-                                                            } ${user?.role !== "SUPER_ADMIN" ? "opacity-50 cursor-not-allowed" : ""}`}
-                                                        title={user?.role !== "SUPER_ADMIN" ? "Only super admin can approve or change status" : getEffectiveStatus(doc) === "INACTIVE" ? "Approve / Activate" : "Deactivate"}
+                                                            }`}
+                                                        title={getEffectiveStatus(doc) === "INACTIVE" ? "Activate" : "Deactivate"}
                                                         whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
                                                     >
                                                         <Power size={15} />
@@ -592,7 +652,7 @@ export default function AdminDoctorsPage() {
                     <>
                         <motion.div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewDoc(null)} />
                         <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <motion.div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 relative max-h-[90vh] overflow-y-auto" initial={{ scale: 0.92, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 30 }} onClick={(e) => e.stopPropagation()}>
+                            <motion.div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8" initial={{ scale: 0.92, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 30 }} onClick={(e) => e.stopPropagation()}>
                                 <button onClick={() => setViewDoc(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
 
                                 {/* Header */}
@@ -630,7 +690,7 @@ export default function AdminDoctorsPage() {
                                     {/* Basic Info */}
                                     <div>
                                         <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5"><User size={13} /> Basic Info</p>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                             {viewDoc.phone && (
                                                 <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
                                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Phone</p>
@@ -667,6 +727,20 @@ export default function AdminDoctorsPage() {
                                                     <p className="text-sm font-medium text-gray-800">{viewDoc.num_clinics}</p>
                                                 </div>
                                             )}
+                                            {viewDoc.sms_service && (
+                                                <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">SMS Service</p>
+                                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${getSmsStatusTone(viewDoc.sms_service.status)}`}>
+                                                        {viewDoc.sms_service.status}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {viewDoc.sms_service && (
+                                                <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">SMS Balance</p>
+                                                    <p className="text-sm font-medium text-gray-800">{viewDoc.sms_service.displayText}</p>
+                                                </div>
+                                            )}
                                             {viewDoc.whatsapp_numbers && viewDoc.whatsapp_numbers.length > 0 && (
                                                 <div className="bg-gray-50 rounded-xl px-3.5 py-2.5 col-span-2">
                                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">WhatsApp</p>
@@ -680,7 +754,7 @@ export default function AdminDoctorsPage() {
                                     {(viewDoc.registration_no || viewDoc.education || viewDoc.address) && (
                                         <div>
                                             <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5"><Stethoscope size={13} /> Professional</p>
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                 {viewDoc.registration_no && (
                                                     <div className="bg-gray-50 rounded-xl px-3.5 py-2.5">
                                                         <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Registration No.</p>
@@ -776,10 +850,10 @@ export default function AdminDoctorsPage() {
                                     <Power size={26} className={getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "text-green-500" : "text-orange-500"} />
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                    {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "Approve Doctor?" : "Activate Doctor?") : "Deactivate Doctor?"}
+                                    {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "Activate" : "Deactivate"} Doctor?
                                 </h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Are you sure you want to {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "approve" : "activate") : "deactivate"}{" "}
+                                    Are you sure you want to {getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? "activate" : "deactivate"}{" "}
                                     <span className="font-semibold text-gray-700">Dr. {statusToggleDoc.doctor_name}</span>?
                                     {getEffectiveStatus(statusToggleDoc) !== "INACTIVE" && (
                                         <span className="block mt-1 text-orange-500 font-medium">The doctor will not be able to log in while deactivated.</span>
@@ -787,13 +861,6 @@ export default function AdminDoctorsPage() {
                                 </p>
                                 {getEffectiveStatus(statusToggleDoc) === "INACTIVE" && (
                                     <div className="mb-4 text-left">
-                                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Active From</label>
-                                        <input
-                                            type="date"
-                                            value={toDateInput(statusToggleDoc.active_from) || new Date().toISOString().split("T")[0]}
-                                            onChange={(e) => setStatusToggleDoc({ ...statusToggleDoc, active_from: e.target.value })}
-                                            className="input-field mt-1 mb-3"
-                                        />
                                         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Active To</label>
                                         <input
                                             type="date"
@@ -812,7 +879,7 @@ export default function AdminDoctorsPage() {
                                             : "bg-orange-500 hover:bg-orange-600"
                                             }`}
                                     >
-                                        {statusToggling ? "Processing…" : getEffectiveStatus(statusToggleDoc) === "INACTIVE" ? (isPendingApproval(statusToggleDoc) ? "Yes, Approve" : "Yes, Activate") : "Yes, Deactivate"}
+                                        {statusToggling ? "Processing…" : statusToggleDoc.status === "INACTIVE" ? "Yes, Activate" : "Yes, Deactivate"}
                                     </button>
                                 </div>
                             </motion.div>
@@ -939,25 +1006,95 @@ export default function AdminDoctorsPage() {
                                                 onFileChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, setEditDocFile, setEditDocUrl, setEditUploading, setEditUploadError); }}
                                                 onClear={() => { setEditDocFile(null); setEditDocUrl(""); if (editFileRef.current) editFileRef.current.value = ""; }}
                                             />
-                                            {editDocUrl && (
-                                                <div className="mt-2 flex justify-end">
-                                                    <a
-                                                        href={editDocUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-                                                    >
-                                                        <FileText size={14} />
-                                                        View Uploaded Document
-                                                    </a>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Smartphone size={14} /> SMS Service</p>
+                                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-4">
+                                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-semibold text-gray-900">Enable appointment booking SMS</p>
+                                                    <p className="text-xs text-gray-500">This does not affect appointment booking. It only controls whether SMS can be sent afterward.</p>
                                                 </div>
-                                            )}
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={editForm.sms_service_enabled}
+                                                    onClick={() => requestSmsToggleChange(!editForm.sms_service_enabled)}
+                                                    className={`inline-flex shrink-0 flex-col items-center gap-1 self-start rounded-2xl border px-2.5 py-2 text-[11px] font-semibold transition-colors ${editForm.sms_service_enabled
+                                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                        : "border-gray-200 bg-white text-gray-600"
+                                                        }`}
+                                                >
+                                                    <span
+                                                        className={`relative h-5 w-10 rounded-full transition-colors ${editForm.sms_service_enabled ? "bg-emerald-500" : "bg-gray-300"}`}
+                                                    >
+                                                        <span
+                                                            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${editForm.sms_service_enabled ? "translate-x-5" : "translate-x-0"}`}
+                                                        />
+                                                    </span>
+                                                    <span>{editForm.sms_service_enabled ? "Active" : "Disabled"}</span>
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                                <div className="rounded-xl bg-white px-3 py-3 border border-indigo-100">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Current Status</p>
+                                                    <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${getSmsStatusTone(editDoc.sms_service?.status)}`}>
+                                                        {editDoc.sms_service?.status || "DISABLED"}
+                                                    </span>
+                                                </div>
+                                                <div className="rounded-xl bg-white px-3 py-3 border border-indigo-100">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Balance</p>
+                                                    <p className="mt-1 text-sm font-semibold text-gray-900">{editDoc.sms_service?.displayText || "0/0 left"}</p>
+                                                </div>
+                                                <div className="rounded-xl bg-white px-3 py-3 border border-indigo-100">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Quick Recharge</p>
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        {[1000, 2000, 5000].map((credits) => (
+                                                            <button
+                                                                key={credits}
+                                                                type="button"
+                                                                onClick={() => setEditForm((prev) => ({ ...prev, sms_recharge_credits: String(credits) }))}
+                                                                className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                                            >
+                                                                +{credits}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                <div className="space-y-1">
+                                                    <label className="text-sm font-medium text-gray-700">Credits to add now</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={editForm.sms_recharge_credits}
+                                                        onChange={(e) => setEditForm({ ...editForm, sms_recharge_credits: e.target.value })}
+                                                        className="input-field"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-sm font-medium text-gray-700">Recharge note</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.sms_recharge_remarks}
+                                                        onChange={(e) => setEditForm({ ...editForm, sms_recharge_remarks: e.target.value })}
+                                                        className="input-field"
+                                                        placeholder="Optional note for audit"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
                                     {editError && <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{editError}</p>}
 
-                                    <div className="flex justify-end gap-3 pt-2">
+                                    <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                                         <button type="button" onClick={() => setEditDoc(null)} className="btn-secondary">Cancel</button>
                                         <button type="submit" disabled={editSubmitting || anyEditUploading} className="btn-primary">
                                             {editSubmitting ? "Saving…" : "Save Changes"}
@@ -972,11 +1109,60 @@ export default function AdminDoctorsPage() {
 
             {/* ═══════ Create Doctor Modal ═══════ */}
             <AnimatePresence>
+                {smsToggleConfirmOpen && editDoc && pendingSmsToggleValue !== null && (
+                    <>
+                        <motion.div
+                            className="fixed inset-0 bg-black/40 z-[70] backdrop-blur-sm"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={cancelSmsToggleChange}
+                        />
+                        <motion.div
+                            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            <motion.div
+                                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                                initial={{ scale: 0.94, y: 18 }}
+                                animate={{ scale: 1, y: 0 }}
+                                exit={{ scale: 0.94, y: 18 }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <h3 className="text-lg font-bold text-gray-900">
+                                    {pendingSmsToggleValue ? "Enable SMS service?" : "Disable SMS service?"}
+                                </h3>
+                                <p className="mt-2 text-sm text-gray-500">
+                                    {pendingSmsToggleValue
+                                        ? `SMS sending will be allowed for Dr. ${editDoc.doctor_name} when credits are available.`
+                                        : `SMS sending will be stopped for Dr. ${editDoc.doctor_name}. Appointment booking will continue normally.`}
+                                </p>
+                                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                    <button type="button" onClick={cancelSmsToggleChange} className="btn-secondary">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={confirmSmsToggleChange}
+                                        className={`btn-primary ${pendingSmsToggleValue ? "" : "!bg-red-600 hover:!bg-red-700"}`}
+                                    >
+                                        {pendingSmsToggleValue ? "Yes, Enable" : "Yes, Disable"}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
                 {showForm && (
                     <>
                         <motion.div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { setShowForm(false); resetForm(); }} />
                         <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <motion.div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 relative max-h-[92vh] overflow-y-auto" initial={{ scale: 0.92, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 30 }} onClick={(e) => e.stopPropagation()}>
+                            <motion.div className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8" initial={{ scale: 0.92, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 30 }} onClick={(e) => e.stopPropagation()}>
                                 <button onClick={() => { setShowForm(false); resetForm(); }} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
 
                                 <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2"><Shield className="w-5 h-5 text-indigo-500" /> Create New Doctor</h2>
@@ -1127,4 +1313,3 @@ export default function AdminDoctorsPage() {
         </div>
     );
 }
-
